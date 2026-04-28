@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Image Size Reducer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#333;padding:20px;min-width:700px}
+h1{font-size:1.55rem;font-weight:700;color:#1a2a3a;margin-bottom:16px}
+
+.card{background:#fff;border-radius:8px;padding:16px 18px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.card-title{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:10px}
+
+/* inputs */
+input[type=text],input[type=number]{border:1px solid #d0d5dd;border-radius:5px;padding:6px 10px;font-size:14px;font-family:inherit;outline:none;transition:border .15s}
+input[type=text]:focus,input[type=number]:focus{border-color:#2980b9}
+input[type=number]::-webkit-inner-spin-button{opacity:.6}
+
+/* buttons */
+button{border:none;border-radius:5px;padding:7px 13px;font-size:13px;font-family:inherit;cursor:pointer;transition:opacity .15s}
+button:disabled{opacity:.4;cursor:not-allowed}
+
+/* folder row */
+.folder-row{display:flex;gap:8px;align-items:center}
+.folder-row input{flex:1}
+.btn-browse{background:#e8edf2;color:#333}
+.btn-browse:hover:not(:disabled){background:#d0d9e3}
+#dst-label{margin-top:7px;font-size:12px;color:#999}
+
+/* slider */
+.slider-wrap{display:flex;align-items:center;gap:10px}
+.slider-wrap span{font-size:12px;color:#aaa;white-space:nowrap}
+input[type=range]{flex:1;accent-color:#2980b9;cursor:pointer;height:6px}
+.size-row{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+.size-val{font-size:1.05rem;font-weight:700;color:#2980b9}
+.sep{color:#ccc}
+.size-row input[type=number]{width:80px}
+.btn-apply{background:#e8edf2;color:#333}
+.btn-apply:hover:not(:disabled){background:#d0d9e3}
+
+/* pixel dims */
+.px-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px}
+.px-row label{font-size:13px;color:#555}
+.px-row input[type=number]{width:80px}
+.px-row .hint{font-size:11px;color:#bbb;margin-left:4px}
+label.cb-label{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:14px}
+label.cb-label input{accent-color:#2980b9;width:15px;height:15px;cursor:pointer}
+
+/* action row */
+.action-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.btn-start{background:#2980b9;color:#fff;font-weight:600;padding:10px 20px;font-size:14px}
+.btn-start:hover:not(:disabled){background:#3498db}
+.btn-cancel{background:#e74c3c;color:#fff;padding:10px 16px;font-size:14px}
+.btn-cancel:hover:not(:disabled){background:#c0392b}
+#summary{font-size:12px;color:#888;margin-left:auto}
+
+/* progress */
+.prog-wrap{display:flex;align-items:center;gap:10px;margin-top:12px}
+.prog-track{flex:1;background:#e9ecef;border-radius:6px;height:8px;overflow:hidden}
+.prog-bar{height:100%;width:0%;background:#2980b9;border-radius:6px;transition:width .2s}
+#prog-label{font-size:12px;color:#aaa;width:72px;text-align:right;white-space:nowrap}
+
+/* results table */
+.tbl-wrap{overflow:auto;max-height:340px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#f7f8fa;padding:8px 10px;text-align:left;border-bottom:2px solid #e9ecef;position:sticky;top:0;font-weight:600;color:#555;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+th:nth-child(2),th:nth-child(3),th:nth-child(4){text-align:right}
+td{padding:6px 10px;border-bottom:1px solid #f2f4f7}
+td:nth-child(2),td:nth-child(3),td:nth-child(4){text-align:right;font-variant-numeric:tabular-nums}
+tr.running td{color:#e67e22}
+tr.success td:last-child{color:#27ae60}
+tr.skip td:last-child{color:#2980b9}
+tr.error td:last-child{color:#e74c3c}
+tr:nth-child(even) td{background:#fafbfc}
+
+/* quit link */
+#quit-btn{display:block;text-align:center;font-size:12px;color:#ccc;text-decoration:none;margin-top:8px;cursor:pointer}
+#quit-btn:hover{color:#999}
+</style>
+</head>
+<body>
+
+<h1>Image Size Reducer</h1>
+
+<!-- Source folder -->
+<div class="card">
+  <div class="card-title">Dossier source</div>
+  <div class="folder-row">
+    <input type="text" id="src" placeholder="Chemin du dossier…" oninput="onSrcChange()">
+    <button class="btn-browse" onclick="pickFolder()">Parcourir…</button>
+  </div>
+  <div id="dst-label">Dossier de sortie : —</div>
+</div>
+
+<!-- Target size -->
+<div class="card">
+  <div class="card-title">Taille cible maximale</div>
+  <div class="slider-wrap">
+    <span>10 KB</span>
+    <input type="range" id="slider" min="0" max="100" step="0.1" value="61.93" oninput="onSlide()">
+    <span>10 MB</span>
+  </div>
+  <div class="size-row">
+    <span>Valeur&nbsp;: <span class="size-val" id="size-disp">100 KB</span></span>
+    <span class="sep">|</span>
+    <span>Saisie manuelle&nbsp;(KB)&nbsp;:</span>
+    <input type="number" id="kb-input" value="100" min="10" max="10240">
+    <button class="btn-apply" onclick="applyKb()">Appliquer</button>
+  </div>
+</div>
+
+<!-- Pixel dims -->
+<div class="card">
+  <label class="cb-label">
+    <input type="checkbox" id="px-check" onchange="togglePx()">
+    Limiter les dimensions en pixels <span style="color:#aaa;font-size:12px;margin-left:4px">(ratio conservé)</span>
+  </label>
+  <div id="px-opts" class="px-row" style="display:none">
+    <label>Largeur max&nbsp;: <input type="number" id="max-w" placeholder="px" min="1" style="margin-left:4px"></label>
+    <label style="margin-left:12px">Hauteur max&nbsp;: <input type="number" id="max-h" placeholder="px" min="1" style="margin-left:4px"></label>
+    <span class="hint">(laisser un champ vide pour ignorer cet axe)</span>
+  </div>
+</div>
+
+<!-- Actions -->
+<div class="card">
+  <div class="action-row">
+    <button class="btn-start" id="btn-start" onclick="start()">▶&nbsp; Démarrer la compression</button>
+    <button class="btn-cancel" id="btn-cancel" onclick="doCancel()" disabled>✕&nbsp; Annuler</button>
+    <span id="summary"></span>
+  </div>
+  <div class="prog-wrap">
+    <div class="prog-track"><div class="prog-bar" id="prog-bar"></div></div>
+    <span id="prog-label"></span>
+  </div>
+</div>
+
+<!-- Results -->
+<div class="card" style="padding:8px 0 0">
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Fichier</th>
+          <th>Original</th>
+          <th>Compressé</th>
+          <th>Ratio</th>
+          <th>Statut</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<a id="quit-btn" onclick="quit()">✕ Quitter l'application</a>
+
+<script>
+const MIN=10, MAX=10240;
+
+function slToKb(v){
+  const lo=Math.log10(MIN),hi=Math.log10(MAX);
+  return Math.max(MIN,Math.min(MAX,Math.round(10**(lo+v/100*(hi-lo)))));
+}
+function kbToSl(kb){
+  const lo=Math.log10(MIN),hi=Math.log10(MAX);
+  return (Math.log10(Math.max(MIN,Math.min(MAX,kb)))-lo)/(hi-lo)*100;
+}
+function fmtKb(kb){
+  return kb>=1024?(kb/1024).toFixed(2)+' MB':kb+' KB';
+}
+
+function onSlide(){
+  const kb=slToKb(parseFloat(document.getElementById('slider').value));
+  document.getElementById('size-disp').textContent=fmtKb(kb);
+  document.getElementById('kb-input').value=kb;
+}
+function applyKb(){
+  let kb=parseInt(document.getElementById('kb-input').value)||100;
+  kb=Math.max(MIN,Math.min(MAX,kb));
+  document.getElementById('kb-input').value=kb;
+  document.getElementById('slider').value=kbToSl(kb);
+  document.getElementById('size-disp').textContent=fmtKb(kb);
+}
+function onSrcChange(){
+  const src=document.getElementById('src').value.trim();
+  document.getElementById('dst-label').textContent=
+    src?`Dossier de sortie : ${src}\\compress`:'Dossier de sortie : —';
+}
+function togglePx(){
+  document.getElementById('px-opts').style.display=
+    document.getElementById('px-check').checked?'flex':'none';
+}
+async function pickFolder(){
+  try{
+    const r=await fetch('/api/pick-folder');
+    const d=await r.json();
+    if(d.path){document.getElementById('src').value=d.path;onSrcChange();}
+  }catch(e){console.error(e);}
+}
+async function quit(){
+  await fetch('/api/quit');
+  window.close();
+}
+
+let abort=null;
+
+async function start(){
+  const src=document.getElementById('src').value.trim();
+  if(!src){alert('Veuillez sélectionner un dossier source.');return;}
+
+  const kb=parseInt(document.getElementById('kb-input').value)||100;
+  const target=Math.max(MIN,Math.min(MAX,kb))*1024;
+
+  let maxW=0,maxH=0;
+  if(document.getElementById('px-check').checked){
+    maxW=parseInt(document.getElementById('max-w').value)||0;
+    maxH=parseInt(document.getElementById('max-h').value)||0;
+    if(!maxW&&!maxH){alert('Veuillez saisir au moins une dimension en pixels.');return;}
+  }
+
+  document.getElementById('tbody').innerHTML='';
+  document.getElementById('prog-bar').style.width='0%';
+  document.getElementById('prog-label').textContent='';
+  document.getElementById('summary').textContent='';
+  document.getElementById('btn-start').disabled=true;
+  document.getElementById('btn-cancel').disabled=false;
+
+  abort=new AbortController();
+  try{
+    const resp=await fetch('/api/compress',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folder:src,target,maxW,maxH}),
+      signal:abort.signal
+    });
+    const reader=resp.body.getReader();
+    const dec=new TextDecoder();
+    let buf='';
+    while(true){
+      const{done,value}=await reader.read();
+      if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      const parts=buf.split('\n\n');
+      buf=parts.pop();
+      for(const p of parts){
+        if(p.startsWith('data: '))handleEvent(JSON.parse(p.slice(6)));
+      }
+    }
+  }catch(e){
+    if(e.name!=='AbortError')console.error(e);
+  }
+  document.getElementById('btn-start').disabled=false;
+  document.getElementById('btn-cancel').disabled=true;
+}
+
+function doCancel(){abort?.abort();}
+
+function handleEvent(ev){
+  if(ev.type==='start'){
+    const tr=document.createElement('tr');
+    tr.id='r'+ev.index;
+    tr.className='running';
+    tr.innerHTML=`<td>${esc(ev.file)}</td><td>…</td><td>…</td><td>…</td><td>En cours…</td>`;
+    document.getElementById('tbody').appendChild(tr);
+    tr.scrollIntoView({block:'nearest'});
+    document.getElementById('prog-bar').style.width=(ev.index/ev.total*100)+'%';
+    document.getElementById('prog-label').textContent=`${ev.index+1} / ${ev.total}`;
+
+  }else if(ev.type==='result'){
+    const tr=document.getElementById('r'+ev.index);
+    if(!tr)return;
+    tr.className=ev.status;
+    const ic={success:'✓',skip:'→',error:'✗'};
+    tr.innerHTML=`<td>${esc(ev.file)}</td><td>${ev.origStr}</td><td>${ev.compStr}</td><td>${ev.ratio}</td><td>${ic[ev.status]||''} ${esc(ev.message)}</td>`;
+
+  }else if(ev.type==='done'){
+    document.getElementById('prog-bar').style.width='100%';
+    document.getElementById('prog-label').textContent='Terminé';
+    document.getElementById('btn-start').disabled=false;
+    document.getElementById('btn-cancel').disabled=true;
+    let s=`✓ ${ev.ok} compressée(s)   → ${ev.skip} ignorée(s)   ✗ ${ev.err} erreur(s)`;
+    if(ev.saved&&ev.saved!=='0 B')s+=`   | Économisé : ${ev.saved}`;
+    document.getElementById('summary').textContent=s;
+  }
+}
+
+function esc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
