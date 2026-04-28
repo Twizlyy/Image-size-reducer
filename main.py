@@ -57,16 +57,23 @@ def find_images(root: Path, exclude: Path) -> list:
 # Compression logic
 # ---------------------------------------------------------------------------
 
-def compress_image(src: Path, dst: Path, target: int) -> Tuple[str, int, int, str]:
+def compress_image(
+    src: Path,
+    dst: Path,
+    target: int,
+    max_w: Optional[int] = None,
+    max_h: Optional[int] = None,
+) -> Tuple[str, int, int, str]:
     """Compress image at src to dst so its size <= target bytes.
+
+    If max_w / max_h are set the image is first scaled down to fit within
+    those bounds (aspect ratio preserved). Then file-size compression is
+    applied on top of the result.
 
     Returns (status, original_bytes, final_bytes, message)
     status: 'skip' | 'success' | 'error'
     """
     orig = src.stat().st_size
-    if orig <= target:
-        return 'skip', orig, orig, "Déjà sous le seuil"
-
     ext = src.suffix.lower()
 
     try:
@@ -76,6 +83,25 @@ def compress_image(src: Path, dst: Path, target: int) -> Tuple[str, int, int, st
             img = img.convert('RGB')
 
         W, H = img.size
+
+        # --- Step 0: pixel-dimension cap (if requested) ---
+        needs_px = (max_w and W > max_w) or (max_h and H > max_h)
+        px_label = ""
+        if needs_px:
+            scale = 1.0
+            if max_w and W > max_w:
+                scale = min(scale, max_w / W)
+            if max_h and H > max_h:
+                scale = min(scale, max_h / H)
+            nw = max(int(W * scale), 1)
+            nh = max(int(H * scale), 1)
+            img = img.resize((nw, nh), Image.LANCZOS)
+            W, H = nw, nh
+            px_label = f"{nw}×{nh}"
+
+        # Skip only when the file already fits every constraint
+        if orig <= target and not needs_px:
+            return 'skip', orig, orig, "Déjà sous le seuil"
 
         def to_bytes(im: Image.Image, q: int = 85) -> bytes:
             buf = io.BytesIO()
@@ -103,13 +129,23 @@ def compress_image(src: Path, dst: Path, target: int) -> Tuple[str, int, int, st
                     hi = mid - 1
             return best
 
+        # After pixel resize, check if we're already under the size target
+        if needs_px:
+            is_lossy_check = ext in {'.jpg', '.jpeg', '.webp'}
+            d0 = to_bytes(img, 95 if is_lossy_check else 85)
+            if len(d0) <= target:
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                dst.write_bytes(d0)
+                return 'success', orig, len(d0), f"Redimensionné {px_label}"
+
         # Step 1 — quality reduction (lossy formats only)
         if ext in {'.jpg', '.jpeg', '.webp'}:
             d = best_quality(img)
             if d:
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 dst.write_bytes(d)
-                return 'success', orig, len(d), "Qualité réduite"
+                msg = f"{px_label} — qualité réduite" if px_label else "Qualité réduite"
+                return 'success', orig, len(d), msg
 
         # Step 2 — dimension reduction (binary search on scale %)
         lo_s, hi_s = 5, 95
@@ -138,7 +174,9 @@ def compress_image(src: Path, dst: Path, target: int) -> Tuple[str, int, int, st
                     best_d = optimized
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_bytes(best_d)
-            return 'success', orig, len(best_d), f"Redimensionné {nw}×{nh}"
+            dim_msg = f"Redimensionné {nw}×{nh}"
+            msg = f"{px_label} — {dim_msg.lower()}" if px_label else dim_msg
+            return 'success', orig, len(best_d), msg
 
         return 'error', orig, orig, f"Impossible d'atteindre {fmt_size(target)}"
 
@@ -234,6 +272,33 @@ class App(tk.Tk):
         self._entry.pack(side='left', padx=(4, 6))
         ttk.Button(r2, text="Appliquer", command=self._apply_entry).pack(side='left')
 
+        # Pixel-dimension cap
+        pf = ttk.LabelFrame(outer, text="Dimensions de sortie (pixels)", padding=(8, 6))
+        pf.pack(fill='x', pady=(0, 8))
+
+        self._px_on = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            pf,
+            text="Limiter les dimensions en pixels (ratio conservé)",
+            variable=self._px_on,
+            command=self._toggle_px,
+        ).pack(anchor='w')
+
+        self._px_opts = ttk.Frame(pf)
+        # Packed on demand by _toggle_px
+
+        po = self._px_opts
+        ttk.Label(po, text="Largeur max :").pack(side='left')
+        self._max_w_var = tk.StringVar()
+        ttk.Entry(po, textvariable=self._max_w_var, width=7).pack(side='left', padx=(4, 2))
+        ttk.Label(po, text="px", style='Muted.TLabel').pack(side='left', padx=(0, 16))
+        ttk.Label(po, text="Hauteur max :").pack(side='left')
+        self._max_h_var = tk.StringVar()
+        ttk.Entry(po, textvariable=self._max_h_var, width=7).pack(side='left', padx=(4, 2))
+        ttk.Label(po, text="px", style='Muted.TLabel').pack(side='left', padx=(0, 12))
+        ttk.Label(po, text="(laisser un champ vide pour ignorer cet axe)",
+                  style='Muted.TLabel').pack(side='left')
+
         # Action buttons
         br = ttk.Frame(outer)
         br.pack(fill='x', pady=(4, 6))
@@ -317,6 +382,28 @@ class App(tk.Tk):
         except ValueError:
             messagebox.showerror("Erreur", "Veuillez entrer un entier valide.")
 
+    def _toggle_px(self):
+        if self._px_on.get():
+            self._px_opts.pack(fill='x', pady=(6, 0))
+        else:
+            self._px_opts.pack_forget()
+
+    def _get_px_dims(self) -> Tuple[Optional[int], Optional[int]]:
+        max_w = max_h = None
+        try:
+            v = self._max_w_var.get().strip()
+            if v:
+                max_w = max(1, int(v))
+        except ValueError:
+            pass
+        try:
+            v = self._max_h_var.get().strip()
+            if v:
+                max_h = max(1, int(v))
+        except ValueError:
+            pass
+        return max_w, max_h
+
     def _target_bytes(self) -> int:
         return slider_to_kb(self._sv.get()) * 1024
 
@@ -326,6 +413,17 @@ class App(tk.Tk):
             messagebox.showwarning(
                 "Attention", "Veuillez sélectionner un dossier source valide.")
             return
+
+        max_w, max_h = None, None
+        if self._px_on.get():
+            max_w, max_h = self._get_px_dims()
+            if max_w is None and max_h is None:
+                messagebox.showwarning(
+                    "Attention",
+                    "La limitation en pixels est activée mais aucune dimension n'est saisie.\n"
+                    "Entrez une largeur et/ou une hauteur maximale.")
+                return
+
         for item in self._tree.get_children():
             self._tree.delete(item)
         self._pvar.set(0)
@@ -336,7 +434,7 @@ class App(tk.Tk):
         self._btn_cancel.config(state='normal')
         threading.Thread(
             target=self._run,
-            args=(Path(src), self._target_bytes()),
+            args=(Path(src), self._target_bytes(), max_w, max_h),
             daemon=True,
         ).start()
 
@@ -348,7 +446,8 @@ class App(tk.Tk):
     # Worker thread
     # ------------------------------------------------------------------
 
-    def _run(self, src: Path, target: int):
+    def _run(self, src: Path, target: int,
+             max_w: Optional[int] = None, max_h: Optional[int] = None):
         dst_base = src / 'compress'
         files = find_images(src, exclude=dst_base)
         total = len(files)
@@ -367,7 +466,7 @@ class App(tk.Tk):
             self._q.put(('start', iid, rel, i, total))
 
             status, orig, final, msg = compress_image(
-                fp, dst_base / fp.relative_to(src), target)
+                fp, dst_base / fp.relative_to(src), target, max_w, max_h)
 
             if status == 'success':
                 ok += 1
