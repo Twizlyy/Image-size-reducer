@@ -312,23 +312,27 @@ func compressJPEG(img image.Image, target, W, H int, pxLabel string) ([]byte, st
 		return best, label(pxLabel, "qualité réduite")
 	}
 
-	// Step 2: binary-search scale
+	// Step 2: find the LARGEST scale where even quality=1 fits, then maximise quality.
+	// Probing with quality=1 (worst case) ensures we don't shrink dimensions more than
+	// strictly necessary.
 	loS, hiS := 5, 95
 	bestScale := 0
-	var bestD []byte
 	for loS <= hiS {
 		midS := (loS + hiS) / 2
 		nw, nh := max(W*midS/100, 8), max(H*midS/100, 8)
-		if d, ok := enc(resizeImg(img, nw, nh), 85); ok && len(d) <= target {
-			bestScale, bestD, hiS = midS, d, midS-1
+		if d, ok := enc(resizeImg(img, nw, nh), 1); ok && len(d) <= target {
+			bestScale = midS
+			loS = midS + 1 // still fits — try a larger (less aggressive) scale
 		} else {
-			loS = midS + 1
+			hiS = midS - 1 // doesn't fit even at q=1 — must go smaller
 		}
 	}
 	if bestScale > 0 {
 		nw, nh := max(W*bestScale/100, 8), max(H*bestScale/100, 8)
 		r := resizeImg(img, nw, nh)
+		// Maximise quality at this scale to get as close to target as possible
 		lo, hi = 10, 95
+		var bestD []byte
 		for lo <= hi {
 			mid := (lo + hi) / 2
 			if d, ok := enc(r, mid); ok && len(d) <= target {
@@ -336,6 +340,9 @@ func compressJPEG(img image.Image, target, W, H int, pxLabel string) ([]byte, st
 			} else {
 				hi = mid - 1
 			}
+		}
+		if bestD == nil {
+			bestD, _ = enc(r, 1)
 		}
 		return bestD, label(pxLabel, fmt.Sprintf("redimensionné %d×%d", nw, nh))
 	}
@@ -357,6 +364,7 @@ func compressPNG(img image.Image, target, W, H int, pxLabel string) ([]byte, str
 		return d, label(pxLabel, "optimisé")
 	}
 
+	// Find the LARGEST scale where BestCompression still fits under target.
 	loS, hiS := 5, 95
 	bestScale := 0
 	var bestD []byte
@@ -364,9 +372,10 @@ func compressPNG(img image.Image, target, W, H int, pxLabel string) ([]byte, str
 		midS := (loS + hiS) / 2
 		nw, nh := max(W*midS/100, 8), max(H*midS/100, 8)
 		if d, ok := enc(resizeImg(img, nw, nh)); ok && len(d) <= target {
-			bestScale, bestD, hiS = midS, d, midS-1
+			bestScale, bestD = midS, d
+			loS = midS + 1 // still fits — try larger scale
 		} else {
-			loS = midS + 1
+			hiS = midS - 1 // doesn't fit — try smaller scale
 		}
 	}
 	if bestScale > 0 {
