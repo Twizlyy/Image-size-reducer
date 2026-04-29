@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -33,10 +34,13 @@ var indexHTML []byte
 // ---------------------------------------------------------------------------
 
 type compressReq struct {
-	Folder string `json:"folder"`
-	Target int    `json:"target"` // bytes
-	MaxW   int    `json:"maxW"`
-	MaxH   int    `json:"maxH"`
+	Folder   string `json:"folder"`
+	Target   int    `json:"target"` // bytes
+	MaxW     int    `json:"maxW"`
+	MaxH     int    `json:"maxH"`
+	AltText  bool   `json:"altText"`  // inject Iptc4xmpCore:AltTextAccessibility
+	AltValue string `json:"altValue"` // prefix or suffix literal
+	AltMode  string `json:"altMode"`  // "prefix" | "suffix"
 }
 
 type progressEvent struct {
@@ -155,7 +159,11 @@ func handleCompress(w http.ResponseWriter, r *http.Request) {
 		send(progressEvent{Type: "start", Index: i, Total: total, File: rel})
 
 		dst := filepath.Join(dstBase, rel)
-		status, orig, final, msg := compressFile(fp, dst, req.Target, req.MaxW, req.MaxH)
+		altVal := ""
+		if req.AltText {
+			altVal = req.AltValue
+		}
+		status, orig, final, msg := compressFile(fp, dst, req.Target, req.MaxW, req.MaxH, altVal, req.AltMode)
 
 		switch status {
 		case "success":
@@ -201,7 +209,7 @@ func handleCompress(w http.ResponseWriter, r *http.Request) {
 // Compression
 // ---------------------------------------------------------------------------
 
-func compressFile(src, dst string, target, maxW, maxH int) (status string, orig, final int64, msg string) {
+func compressFile(src, dst string, target, maxW, maxH int, altValue, altMode string) (status string, orig, final int64, msg string) {
 	info, err := os.Stat(src)
 	if err != nil {
 		return "error", 0, 0, err.Error()
@@ -273,6 +281,17 @@ func compressFile(src, dst string, target, maxW, maxH int) (status string, orig,
 
 	if data == nil {
 		return "error", orig, orig, compMsg
+	}
+
+	// Inject XMP accessibility alt text if requested
+	if altValue != "" {
+		alt := buildAltText(filepath.Base(src), altValue, altMode)
+		switch outExt {
+		case ".jpg", ".jpeg":
+			data = injectXMPJPEG(data, alt)
+		case ".png":
+			data = injectXMPPNG(data, alt)
+		}
 	}
 
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
@@ -442,4 +461,104 @@ func fmtSize(b int64) string {
 	default:
 		return fmt.Sprintf("%.2f MB", float64(b)/1_048_576)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Alt text helpers
+// ---------------------------------------------------------------------------
+
+// buildAltText constructs the Iptc4xmpCore:AltTextAccessibility value.
+// The filename has its extension stripped, then hyphens and underscores
+// replaced with spaces; original casing is preserved.
+func buildAltText(filename, value, mode string) string {
+	base := strings.TrimSuffix(filename, filepath.Ext(filename))
+	cleaned := strings.NewReplacer("-", " ", "_", " ").Replace(base)
+	if mode == "suffix" {
+		return cleaned + value
+	}
+	return value + cleaned
+}
+
+// ---------------------------------------------------------------------------
+// XMP injection
+// ---------------------------------------------------------------------------
+
+func xmpPacket(altText string) string {
+	return "<?xpacket begin='\xef\xbb\xbf' id='W5M0MpCehiHzreSzNTczkc9d'?>" +
+		"<x:xmpmeta xmlns:x='adobe:ns:meta/'>" +
+		"<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>" +
+		"<rdf:Description rdf:about='' xmlns:Iptc4xmpCore='http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/'>" +
+		"<Iptc4xmpCore:AltTextAccessibility>" + xmlEscape(altText) + "</Iptc4xmpCore:AltTextAccessibility>" +
+		"</rdf:Description></rdf:RDF></x:xmpmeta>" +
+		"<?xpacket end='w'?>"
+}
+
+func xmlEscape(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
+}
+
+// injectXMPJPEG embeds an XMP APP1 segment right after the JPEG SOI marker.
+// When we re-encode an image via image/jpeg all prior metadata is already
+// stripped, so no removal of existing segments is necessary.
+func injectXMPJPEG(data []byte, altText string) []byte {
+	if len(data) < 2 {
+		return data
+	}
+	ns := "http://ns.adobe.com/xap/1.0/\x00"
+	payload := []byte(ns + xmpPacket(altText))
+	segLen := len(payload) + 2 // length field includes its own 2 bytes
+	if segLen > 0xFFFF {
+		return data // XMP too large to embed in a single APP1 segment
+	}
+	seg := make([]byte, 4+len(payload))
+	seg[0], seg[1] = 0xFF, 0xE1
+	seg[2], seg[3] = byte(segLen>>8), byte(segLen)
+	copy(seg[4:], payload)
+
+	out := make([]byte, 0, len(data)+len(seg))
+	out = append(out, data[:2]...) // SOI
+	out = append(out, seg...)
+	out = append(out, data[2:]...)
+	return out
+}
+
+// injectXMPPNG adds an iTXt chunk carrying XMP metadata after the IHDR chunk.
+func injectXMPPNG(data []byte, altText string) []byte {
+	const sig = "\x89PNG\r\n\x1a\n"
+	if len(data) < 8 || string(data[:8]) != sig {
+		return data
+	}
+	// IHDR chunk: 4-byte length + 4-byte type + data + 4-byte CRC
+	if len(data) < 8+12 {
+		return data
+	}
+	ihdrLen := int(data[8])<<24 | int(data[9])<<16 | int(data[10])<<8 | int(data[11])
+	insertAt := 8 + 4 + 4 + ihdrLen + 4
+	if insertAt > len(data) {
+		return data
+	}
+
+	// iTXt data: keyword\0 compFlag compMethod langTag\0 transKW\0 text
+	keyword := "XML:com.adobe.xmp"
+	chunkData := []byte(keyword + "\x00\x00\x00\x00\x00" + xmpPacket(altText))
+	chunkType := []byte("iTXt")
+
+	length := len(chunkData)
+	chunk := make([]byte, 4+4+length+4)
+	chunk[0], chunk[1], chunk[2], chunk[3] = byte(length>>24), byte(length>>16), byte(length>>8), byte(length)
+	copy(chunk[4:8], chunkType)
+	copy(chunk[8:], chunkData)
+	// CRC covers type + data
+	c := crc32.ChecksumIEEE(chunk[4 : 8+length])
+	chunk[8+length], chunk[9+length], chunk[10+length], chunk[11+length] =
+		byte(c>>24), byte(c>>16), byte(c>>8), byte(c)
+
+	out := make([]byte, 0, len(data)+len(chunk))
+	out = append(out, data[:insertAt]...)
+	out = append(out, chunk...)
+	out = append(out, data[insertAt:]...)
+	return out
 }

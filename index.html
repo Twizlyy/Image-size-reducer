@@ -2,163 +2,441 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Image Size Reducer</title>
 <style>
+/* ── Reset & base ─────────────────────────────────────────────────────────── */
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#333;padding:20px;min-width:700px}
-h1{font-size:1.55rem;font-weight:700;color:#1a2a3a;margin-bottom:16px}
+:root{
+  --pink:#E380CF;--orange:#FFAE3D;--teal:#00CFB4;
+  --dark:#1E1F1F;--white:#FEFEFE;
+  --glass:rgba(254,254,254,.07);
+  --glass-border:rgba(254,254,254,.12);
+  --glass-hover:rgba(254,254,254,.11);
+  --text:rgba(254,254,254,.9);
+  --muted:rgba(254,254,254,.45);
+  --radius:14px;
+}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Segoe UI',system-ui,sans-serif;
+  background:var(--dark);
+  color:var(--text);
+  min-height:100vh;
+  padding:28px 20px 48px;
+  min-width:680px;
+}
 
-.card{background:#fff;border-radius:8px;padding:16px 18px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-.card-title{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:10px}
+/* ── Background blobs ─────────────────────────────────────────────────────── */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 55% 55% at 8% 18%,  rgba(227,128,207,.22) 0%,transparent 65%),
+    radial-gradient(ellipse 50% 60% at 92% 82%,  rgba(0,207,180,.20)  0%,transparent 65%),
+    radial-gradient(ellipse 45% 40% at 68% 6%,   rgba(255,174,61,.16) 0%,transparent 55%),
+    radial-gradient(ellipse 35% 35% at 30% 90%,  rgba(0,207,180,.10)  0%,transparent 55%);
+  pointer-events:none;z-index:0;
+}
+.container{position:relative;z-index:1;max-width:900px;margin:0 auto}
 
-/* inputs */
-input[type=text],input[type=number]{border:1px solid #d0d5dd;border-radius:5px;padding:6px 10px;font-size:14px;font-family:inherit;outline:none;transition:border .15s}
-input[type=text]:focus,input[type=number]:focus{border-color:#2980b9}
-input[type=number]::-webkit-inner-spin-button{opacity:.6}
+/* ── Header ───────────────────────────────────────────────────────────────── */
+header{margin-bottom:28px}
+h1{
+  font-size:2rem;font-weight:800;letter-spacing:-.03em;
+  background:linear-gradient(120deg,var(--pink) 0%,var(--orange) 48%,var(--teal) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+  display:inline-block;
+}
+.subtitle{color:var(--muted);font-size:.88rem;margin-top:4px}
 
-/* buttons */
-button{border:none;border-radius:5px;padding:7px 13px;font-size:13px;font-family:inherit;cursor:pointer;transition:opacity .15s}
-button:disabled{opacity:.4;cursor:not-allowed}
+/* ── Glass card ───────────────────────────────────────────────────────────── */
+.card{
+  background:var(--glass);
+  border:1px solid var(--glass-border);
+  border-radius:var(--radius);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  padding:18px 20px;
+  margin-bottom:12px;
+  box-shadow:0 4px 24px rgba(0,0,0,.25);
+  transition:border-color .2s;
+}
+.card:focus-within{border-color:rgba(254,254,254,.22)}
 
-/* folder row */
-.folder-row{display:flex;gap:8px;align-items:center}
-.folder-row input{flex:1}
-.btn-browse{background:#e8edf2;color:#333}
-.btn-browse:hover:not(:disabled){background:#d0d9e3}
-#dst-label{margin-top:7px;font-size:12px;color:#999}
+.card-label{
+  font-size:.72rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--muted);margin-bottom:12px;
+}
 
-/* slider */
+/* ── Toggle switch ────────────────────────────────────────────────────────── */
+.card-toggle{
+  display:flex;align-items:center;gap:12px;cursor:pointer;
+  user-select:none;
+}
+.card-toggle .card-label{margin:0}
+.switch{position:relative;width:42px;height:24px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0;position:absolute}
+.knob{
+  position:absolute;inset:0;
+  background:rgba(254,254,254,.15);
+  border-radius:24px;
+  transition:.3s;
+}
+.knob::before{
+  content:'';position:absolute;
+  width:18px;height:18px;
+  left:3px;top:3px;
+  background:rgba(254,254,254,.55);
+  border-radius:50%;
+  transition:.3s;
+  box-shadow:0 1px 4px rgba(0,0,0,.3);
+}
+.switch input:checked~.knob{
+  background:linear-gradient(135deg,var(--teal),var(--pink));
+}
+.switch input:checked~.knob::before{
+  transform:translateX(18px);
+  background:var(--white);
+}
+.badge{
+  font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  padding:2px 8px;border-radius:20px;
+  background:linear-gradient(135deg,rgba(0,207,180,.25),rgba(0,207,180,.1));
+  border:1px solid rgba(0,207,180,.35);
+  color:var(--teal);
+}
+
+/* ── Collapsible extra ────────────────────────────────────────────────────── */
+.card-extra{
+  margin-top:14px;padding-top:14px;
+  border-top:1px solid var(--glass-border);
+  animation:fadeDown .2s ease;
+}
+@keyframes fadeDown{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+/* ── Inputs ───────────────────────────────────────────────────────────────── */
+input[type=text],input[type=number]{
+  background:rgba(254,254,254,.08);
+  border:1px solid rgba(254,254,254,.14);
+  border-radius:9px;
+  padding:8px 12px;
+  font-size:14px;font-family:inherit;
+  color:var(--white);
+  outline:none;
+  transition:border-color .2s,background .2s;
+}
+input[type=text]:focus,input[type=number]:focus{
+  border-color:rgba(0,207,180,.6);
+  background:rgba(254,254,254,.12);
+}
+input::placeholder{color:var(--muted)}
+input[type=number]::-webkit-inner-spin-button{opacity:.4}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+button{
+  border:none;border-radius:9px;
+  padding:8px 16px;
+  font-size:14px;font-family:inherit;
+  cursor:pointer;
+  transition:opacity .15s,transform .1s,box-shadow .2s;
+  white-space:nowrap;
+}
+button:disabled{opacity:.35;cursor:not-allowed;transform:none!important}
+button:not(:disabled):active{transform:scale(.97)}
+
+.btn-ghost{
+  background:rgba(254,254,254,.1);
+  border:1px solid var(--glass-border);
+  color:var(--text);
+}
+.btn-ghost:not(:disabled):hover{background:var(--glass-hover)}
+
+.btn-primary{
+  background:linear-gradient(135deg,var(--pink) 0%,var(--orange) 100%);
+  color:var(--dark);font-weight:700;
+  padding:11px 22px;font-size:14.5px;
+  box-shadow:0 4px 20px rgba(227,128,207,.35);
+}
+.btn-primary:not(:disabled):hover{
+  box-shadow:0 6px 28px rgba(227,128,207,.5);
+  opacity:.92;
+}
+
+.btn-danger{
+  background:rgba(227,128,207,.18);
+  border:1px solid rgba(227,128,207,.3);
+  color:var(--pink);
+  padding:11px 18px;
+}
+.btn-danger:not(:disabled):hover{background:rgba(227,128,207,.28)}
+
+/* ── Folder row ───────────────────────────────────────────────────────────── */
+.input-row{display:flex;gap:8px;align-items:center}
+.input-row input[type=text]{flex:1}
+#dst-label{margin-top:8px;font-size:12px;color:var(--muted)}
+
+/* ── Slider section ───────────────────────────────────────────────────────── */
 .slider-wrap{display:flex;align-items:center;gap:10px}
-.slider-wrap span{font-size:12px;color:#aaa;white-space:nowrap}
-input[type=range]{flex:1;accent-color:#2980b9;cursor:pointer;height:6px}
-.size-row{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
-.size-val{font-size:1.05rem;font-weight:700;color:#2980b9}
-.sep{color:#ccc}
-.size-row input[type=number]{width:80px}
-.btn-apply{background:#e8edf2;color:#333}
-.btn-apply:hover:not(:disabled){background:#d0d9e3}
+.slider-wrap span{font-size:12px;color:var(--muted);white-space:nowrap}
+input[type=range]{
+  flex:1;height:5px;
+  -webkit-appearance:none;appearance:none;
+  background:rgba(254,254,254,.15);
+  border-radius:5px;outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:18px;height:18px;border-radius:50%;
+  background:linear-gradient(135deg,var(--teal),var(--pink));
+  box-shadow:0 2px 8px rgba(0,207,180,.5);
+  cursor:pointer;
+  transition:box-shadow .2s;
+}
+input[type=range]::-webkit-slider-thumb:hover{
+  box-shadow:0 2px 16px rgba(0,207,180,.7);
+}
+.size-row{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.size-val{font-size:1.1rem;font-weight:800;
+  background:linear-gradient(135deg,var(--teal),var(--pink));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.sep{color:var(--glass-border)}
+.size-row input[type=number]{width:84px}
+.btn-apply{
+  background:rgba(0,207,180,.15);
+  border:1px solid rgba(0,207,180,.3);
+  color:var(--teal);
+}
+.btn-apply:not(:disabled):hover{background:rgba(0,207,180,.25)}
 
-/* pixel dims */
-.px-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px}
-.px-row label{font-size:13px;color:#555}
-.px-row input[type=number]{width:80px}
-.px-row .hint{font-size:11px;color:#bbb;margin-left:4px}
-label.cb-label{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:14px}
-label.cb-label input{accent-color:#2980b9;width:15px;height:15px;cursor:pointer}
+/* ── Pixel dims & alt-text extras ─────────────────────────────────────────── */
+.fields-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.field-group{display:flex;align-items:center;gap:6px}
+.field-group label{font-size:13px;color:var(--muted);white-space:nowrap}
+.field-group input[type=number]{width:82px}
+.hint{font-size:11.5px;color:var(--muted);margin-left:4px}
 
-/* action row */
-.action-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.btn-start{background:#2980b9;color:#fff;font-weight:600;padding:10px 20px;font-size:14px}
-.btn-start:hover:not(:disabled){background:#3498db}
-.btn-cancel{background:#e74c3c;color:#fff;padding:10px 16px;font-size:14px}
-.btn-cancel:hover:not(:disabled){background:#c0392b}
-#summary{font-size:12px;color:#888;margin-left:auto}
+/* mode pill toggle */
+.pill-toggle{
+  display:flex;
+  background:rgba(254,254,254,.07);
+  border:1px solid var(--glass-border);
+  border-radius:8px;
+  padding:3px;gap:2px;
+}
+.pill-toggle input{display:none}
+.pill-toggle label{
+  padding:5px 16px;border-radius:6px;
+  cursor:pointer;font-size:13px;
+  color:var(--muted);
+  transition:background .2s,color .2s;
+}
+.pill-toggle input:checked+label{
+  background:linear-gradient(135deg,rgba(0,207,180,.25),rgba(227,128,207,.2));
+  color:var(--white);
+}
 
-/* progress */
-.prog-wrap{display:flex;align-items:center;gap:10px;margin-top:12px}
-.prog-track{flex:1;background:#e9ecef;border-radius:6px;height:8px;overflow:hidden}
-.prog-bar{height:100%;width:0%;background:#2980b9;border-radius:6px;transition:width .2s}
-#prog-label{font-size:12px;color:#aaa;width:72px;text-align:right;white-space:nowrap}
+.alt-text-row{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.alt-text-row input[type=text]{flex:1;min-width:180px}
 
-/* results table */
+.preview-box{
+  margin-top:12px;
+  background:rgba(254,254,254,.05);
+  border:1px solid var(--glass-border);
+  border-radius:8px;
+  padding:9px 13px;
+  font-size:12.5px;
+}
+.preview-box .label{color:var(--muted);margin-right:6px}
+.preview-val{
+  font-weight:600;
+  background:linear-gradient(90deg,var(--orange),var(--pink));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+
+/* ── Action card ──────────────────────────────────────────────────────────── */
+.action-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+#summary{font-size:12px;color:var(--muted);margin-left:auto;text-align:right;line-height:1.5}
+
+.prog-wrap{display:flex;align-items:center;gap:12px;margin-top:16px}
+.prog-track{
+  flex:1;height:7px;
+  background:rgba(254,254,254,.1);
+  border-radius:7px;overflow:hidden;
+}
+.prog-bar{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,var(--teal),var(--pink));
+  border-radius:7px;
+  transition:width .25s ease;
+}
+#prog-label{font-size:12px;color:var(--muted);width:74px;text-align:right;white-space:nowrap}
+
+/* ── Results table ────────────────────────────────────────────────────────── */
+.results-card{padding:0;overflow:hidden}
 .tbl-wrap{overflow:auto;max-height:340px}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{background:#f7f8fa;padding:8px 10px;text-align:left;border-bottom:2px solid #e9ecef;position:sticky;top:0;font-weight:600;color:#555;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+th{
+  padding:10px 14px;text-align:left;
+  background:rgba(254,254,254,.05);
+  border-bottom:1px solid var(--glass-border);
+  color:var(--muted);font-size:11px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.07em;
+  position:sticky;top:0;
+  backdrop-filter:blur(10px);
+}
 th:nth-child(2),th:nth-child(3),th:nth-child(4){text-align:right}
-td{padding:6px 10px;border-bottom:1px solid #f2f4f7}
+td{padding:7px 14px;border-bottom:1px solid rgba(254,254,254,.04);color:var(--text)}
 td:nth-child(2),td:nth-child(3),td:nth-child(4){text-align:right;font-variant-numeric:tabular-nums}
-tr.running td{color:#e67e22}
-tr.success td:last-child{color:#27ae60}
-tr.skip td:last-child{color:#2980b9}
-tr.error td:last-child{color:#e74c3c}
-tr:nth-child(even) td{background:#fafbfc}
+tr:last-child td{border-bottom:none}
+tr.running td{color:rgba(255,174,61,.7)}
+tr.success td:last-child{color:var(--teal)}
+tr.skip    td:last-child{color:var(--orange)}
+tr.error   td:last-child{color:var(--pink)}
+tr:nth-child(even) td{background:rgba(254,254,254,.025)}
 
-/* quit link */
-#quit-btn{display:block;text-align:center;font-size:12px;color:#ccc;text-decoration:none;margin-top:8px;cursor:pointer}
-#quit-btn:hover{color:#999}
+/* ── Quit link ────────────────────────────────────────────────────────────── */
+#quit{
+  display:block;text-align:center;
+  margin-top:18px;font-size:12px;color:rgba(254,254,254,.2);
+  cursor:pointer;background:none;border:none;
+  font-family:inherit;
+  transition:color .2s;
+}
+#quit:hover{color:rgba(254,254,254,.5)}
 </style>
 </head>
 <body>
+<div class="container">
 
-<h1>Image Size Reducer</h1>
+  <!-- Header -->
+  <header>
+    <h1>Image Size Reducer</h1>
+    <p class="subtitle">Compressez vos images en lot, sans réduction de qualité inutile</p>
+  </header>
 
-<!-- Source folder -->
-<div class="card">
-  <div class="card-title">Dossier source</div>
-  <div class="folder-row">
-    <input type="text" id="src" placeholder="Chemin du dossier…" oninput="onSrcChange()">
-    <button class="btn-browse" onclick="pickFolder()">Parcourir…</button>
+  <!-- Source folder -->
+  <div class="card">
+    <div class="card-label">Dossier source</div>
+    <div class="input-row">
+      <input type="text" id="src" placeholder="Chemin du dossier…" oninput="onSrcChange()">
+      <button class="btn-ghost" onclick="pickFolder()">Parcourir…</button>
+    </div>
+    <div id="dst-label">Dossier de sortie : —</div>
   </div>
-  <div id="dst-label">Dossier de sortie : —</div>
-</div>
 
-<!-- Target size -->
-<div class="card">
-  <div class="card-title">Taille cible maximale</div>
-  <div class="slider-wrap">
-    <span>10 KB</span>
-    <input type="range" id="slider" min="0" max="100" step="0.1" value="61.93" oninput="onSlide()">
-    <span>10 MB</span>
+  <!-- Target size -->
+  <div class="card">
+    <div class="card-label">Taille cible maximale</div>
+    <div class="slider-wrap">
+      <span>10 KB</span>
+      <input type="range" id="slider" min="0" max="100" step="0.1" value="61.93" oninput="onSlide()">
+      <span>10 MB</span>
+    </div>
+    <div class="size-row">
+      <span>Valeur&nbsp;: <span class="size-val" id="size-disp">100 KB</span></span>
+      <span class="sep">|</span>
+      <span style="color:var(--muted);font-size:13px">Saisie manuelle&nbsp;(KB)&nbsp;:</span>
+      <input type="number" id="kb-input" value="100" min="10" max="10240">
+      <button class="btn-apply" onclick="applyKb()">Appliquer</button>
+    </div>
   </div>
-  <div class="size-row">
-    <span>Valeur&nbsp;: <span class="size-val" id="size-disp">100 KB</span></span>
-    <span class="sep">|</span>
-    <span>Saisie manuelle&nbsp;(KB)&nbsp;:</span>
-    <input type="number" id="kb-input" value="100" min="10" max="10240">
-    <button class="btn-apply" onclick="applyKb()">Appliquer</button>
-  </div>
-</div>
 
-<!-- Pixel dims -->
-<div class="card">
-  <label class="cb-label">
-    <input type="checkbox" id="px-check" onchange="togglePx()">
-    Limiter les dimensions en pixels <span style="color:#aaa;font-size:12px;margin-left:4px">(ratio conservé)</span>
-  </label>
-  <div id="px-opts" class="px-row" style="display:none">
-    <label>Largeur max&nbsp;: <input type="number" id="max-w" placeholder="px" min="1" style="margin-left:4px"></label>
-    <label style="margin-left:12px">Hauteur max&nbsp;: <input type="number" id="max-h" placeholder="px" min="1" style="margin-left:4px"></label>
-    <span class="hint">(laisser un champ vide pour ignorer cet axe)</span>
+  <!-- Pixel dimensions -->
+  <div class="card">
+    <label class="card-toggle">
+      <div class="switch">
+        <input type="checkbox" id="px-check" onchange="toggleSection('px-check','px-opts')">
+        <span class="knob"></span>
+      </div>
+      <span class="card-label">Dimensions maximales en pixels</span>
+      <span style="color:var(--muted);font-size:12px;margin-left:2px">(ratio conservé)</span>
+    </label>
+    <div class="card-extra" id="px-opts" style="display:none">
+      <div class="fields-row">
+        <div class="field-group">
+          <label>Largeur max</label>
+          <input type="number" id="max-w" placeholder="px" min="1">
+          <span class="hint">px</span>
+        </div>
+        <div class="field-group">
+          <label>Hauteur max</label>
+          <input type="number" id="max-h" placeholder="px" min="1">
+          <span class="hint">px</span>
+        </div>
+        <span class="hint" style="margin-left:6px">Laisser un champ vide pour ignorer cet axe</span>
+      </div>
+    </div>
   </div>
-</div>
 
-<!-- Actions -->
-<div class="card">
-  <div class="action-row">
-    <button class="btn-start" id="btn-start" onclick="start()">▶&nbsp; Démarrer la compression</button>
-    <button class="btn-cancel" id="btn-cancel" onclick="doCancel()" disabled>✕&nbsp; Annuler</button>
-    <span id="summary"></span>
+  <!-- Alt text accessibility -->
+  <div class="card">
+    <label class="card-toggle">
+      <div class="switch">
+        <input type="checkbox" id="alt-check" onchange="toggleSection('alt-check','alt-opts')">
+        <span class="knob"></span>
+      </div>
+      <span class="card-label">Texte alternatif d'accessibilité</span>
+      <span class="badge">WordPress</span>
+    </label>
+    <div class="card-extra" id="alt-opts" style="display:none">
+      <div class="alt-text-row">
+        <div class="pill-toggle">
+          <input type="radio" name="alt-mode" id="m-prefix" value="prefix" checked onchange="updatePreview()">
+          <label for="m-prefix">Préfixe</label>
+          <input type="radio" name="alt-mode" id="m-suffix" value="suffix" onchange="updatePreview()">
+          <label for="m-suffix">Suffixe</label>
+        </div>
+        <input type="text" id="alt-value" placeholder="Valeur…" oninput="updatePreview()">
+      </div>
+      <div class="preview-box" id="alt-preview">
+        <span class="label">Aperçu :</span>
+        <span class="preview-val" id="prev-val">—</span>
+      </div>
+    </div>
   </div>
-  <div class="prog-wrap">
-    <div class="prog-track"><div class="prog-bar" id="prog-bar"></div></div>
-    <span id="prog-label"></span>
-  </div>
-</div>
 
-<!-- Results -->
-<div class="card" style="padding:8px 0 0">
-  <div class="tbl-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Fichier</th>
-          <th>Original</th>
-          <th>Compressé</th>
-          <th>Ratio</th>
-          <th>Statut</th>
-        </tr>
-      </thead>
-      <tbody id="tbody"></tbody>
-    </table>
+  <!-- Actions -->
+  <div class="card">
+    <div class="action-row">
+      <button class="btn-primary" id="btn-start" onclick="start()">▶&nbsp;&nbsp;Démarrer la compression</button>
+      <button class="btn-danger"  id="btn-cancel" onclick="doCancel()" disabled>✕&nbsp;&nbsp;Annuler</button>
+      <span id="summary"></span>
+    </div>
+    <div class="prog-wrap">
+      <div class="prog-track"><div class="prog-bar" id="prog-bar"></div></div>
+      <span id="prog-label"></span>
+    </div>
   </div>
-</div>
 
-<a id="quit-btn" onclick="quit()">✕ Quitter l'application</a>
+  <!-- Results -->
+  <div class="card results-card">
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Fichier</th>
+            <th>Original</th>
+            <th>Compressé</th>
+            <th>Ratio</th>
+            <th>Statut</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <button id="quit" onclick="quit()">✕ Quitter l'application</button>
+
+</div><!-- /container -->
 
 <script>
-const MIN=10, MAX=10240;
+const MIN=10,MAX=10240;
+const SAMPLE='exemple-image_01';
 
+/* ── Slider log scale ─────────────────────────────────────────────────────── */
 function slToKb(v){
   const lo=Math.log10(MIN),hi=Math.log10(MAX);
   return Math.max(MIN,Math.min(MAX,Math.round(10**(lo+v/100*(hi-lo)))));
@@ -167,9 +445,7 @@ function kbToSl(kb){
   const lo=Math.log10(MIN),hi=Math.log10(MAX);
   return (Math.log10(Math.max(MIN,Math.min(MAX,kb)))-lo)/(hi-lo)*100;
 }
-function fmtKb(kb){
-  return kb>=1024?(kb/1024).toFixed(2)+' MB':kb+' KB';
-}
+function fmtKb(kb){return kb>=1024?(kb/1024).toFixed(2)+' MB':kb+' KB'}
 
 function onSlide(){
   const kb=slToKb(parseFloat(document.getElementById('slider').value));
@@ -183,27 +459,42 @@ function applyKb(){
   document.getElementById('slider').value=kbToSl(kb);
   document.getElementById('size-disp').textContent=fmtKb(kb);
 }
+
+/* ── Folder ───────────────────────────────────────────────────────────────── */
 function onSrcChange(){
   const src=document.getElementById('src').value.trim();
   document.getElementById('dst-label').textContent=
     src?`Dossier de sortie : ${src}\\compress`:'Dossier de sortie : —';
-}
-function togglePx(){
-  document.getElementById('px-opts').style.display=
-    document.getElementById('px-check').checked?'flex':'none';
 }
 async function pickFolder(){
   try{
     const r=await fetch('/api/pick-folder');
     const d=await r.json();
     if(d.path){document.getElementById('src').value=d.path;onSrcChange();}
-  }catch(e){console.error(e);}
-}
-async function quit(){
-  await fetch('/api/quit');
-  window.close();
+  }catch(e){console.error(e)}
 }
 
+/* ── Toggle sections ──────────────────────────────────────────────────────── */
+function toggleSection(checkId,bodyId){
+  const show=document.getElementById(checkId).checked;
+  document.getElementById(bodyId).style.display=show?'block':'none';
+  if(checkId==='alt-check')updatePreview();
+}
+
+/* ── Alt text preview ─────────────────────────────────────────────────────── */
+function cleanFilename(name){
+  // remove extension, replace - and _ with spaces, preserve case
+  return name.replace(/\.[^.]+$/,'').replace(/[-_]/g,' ');
+}
+function updatePreview(){
+  const val=document.getElementById('alt-value').value;
+  const mode=document.querySelector('input[name=alt-mode]:checked').value;
+  const base=cleanFilename(SAMPLE);
+  const result=mode==='prefix'?val+base:base+val;
+  document.getElementById('prev-val').textContent=result||'—';
+}
+
+/* ── Start / Cancel ───────────────────────────────────────────────────────── */
 let abort=null;
 
 async function start(){
@@ -217,9 +508,17 @@ async function start(){
   if(document.getElementById('px-check').checked){
     maxW=parseInt(document.getElementById('max-w').value)||0;
     maxH=parseInt(document.getElementById('max-h').value)||0;
-    if(!maxW&&!maxH){alert('Veuillez saisir au moins une dimension en pixels.');return;}
+    if(!maxW&&!maxH){alert('Activez au moins une dimension en pixels.');return;}
   }
 
+  const altText=document.getElementById('alt-check').checked;
+  const altValue=document.getElementById('alt-value').value;
+  const altMode=document.querySelector('input[name=alt-mode]:checked').value;
+  if(altText&&!altValue.trim()){
+    alert('Veuillez saisir une valeur pour le texte alternatif.');return;
+  }
+
+  // Reset UI
   document.getElementById('tbody').innerHTML='';
   document.getElementById('prog-bar').style.width='0%';
   document.getElementById('prog-label').textContent='';
@@ -232,7 +531,7 @@ async function start(){
     const resp=await fetch('/api/compress',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({folder:src,target,maxW,maxH}),
+      body:JSON.stringify({folder:src,target,maxW,maxH,altText,altValue,altMode}),
       signal:abort.signal
     });
     const reader=resp.body.getReader();
@@ -244,24 +543,20 @@ async function start(){
       buf+=dec.decode(value,{stream:true});
       const parts=buf.split('\n\n');
       buf=parts.pop();
-      for(const p of parts){
-        if(p.startsWith('data: '))handleEvent(JSON.parse(p.slice(6)));
-      }
+      for(const p of parts)if(p.startsWith('data: '))handleEvent(JSON.parse(p.slice(6)));
     }
-  }catch(e){
-    if(e.name!=='AbortError')console.error(e);
-  }
+  }catch(e){if(e.name!=='AbortError')console.error(e)}
   document.getElementById('btn-start').disabled=false;
   document.getElementById('btn-cancel').disabled=true;
 }
 
-function doCancel(){abort?.abort();}
+function doCancel(){abort?.abort()}
 
+/* ── Event handler ────────────────────────────────────────────────────────── */
 function handleEvent(ev){
   if(ev.type==='start'){
     const tr=document.createElement('tr');
-    tr.id='r'+ev.index;
-    tr.className='running';
+    tr.id='r'+ev.index;tr.className='running';
     tr.innerHTML=`<td>${esc(ev.file)}</td><td>…</td><td>…</td><td>…</td><td>En cours…</td>`;
     document.getElementById('tbody').appendChild(tr);
     tr.scrollIntoView({block:'nearest'});
@@ -280,15 +575,14 @@ function handleEvent(ev){
     document.getElementById('prog-label').textContent='Terminé';
     document.getElementById('btn-start').disabled=false;
     document.getElementById('btn-cancel').disabled=true;
-    let s=`✓ ${ev.ok} compressée(s)   → ${ev.skip} ignorée(s)   ✗ ${ev.err} erreur(s)`;
-    if(ev.saved&&ev.saved!=='0 B')s+=`   | Économisé : ${ev.saved}`;
-    document.getElementById('summary').textContent=s;
+    let s=`✓ ${ev.ok} compressée(s)&nbsp;&nbsp;→ ${ev.skip} ignorée(s)&nbsp;&nbsp;✗ ${ev.err} erreur(s)`;
+    if(ev.saved&&ev.saved!=='0 B')s+=`<br>Espace économisé : <strong>${ev.saved}</strong>`;
+    document.getElementById('summary').innerHTML=s;
   }
 }
 
-function esc(s){
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+async function quit(){await fetch('/api/quit');window.close()}
 </script>
 </body>
 </html>
