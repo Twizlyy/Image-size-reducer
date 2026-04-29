@@ -176,6 +176,28 @@ button:not(:disabled):active{transform:scale(.97)}
 .input-row input[type=text]{flex:1}
 #dst-label{margin-top:8px;font-size:12px;color:var(--muted)}
 
+/* ── File chips ────────────────────────────────────────────────────────────── */
+#file-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.chip{
+  display:flex;align-items:center;gap:5px;
+  background:rgba(254,254,254,.10);
+  border:1px solid var(--glass-border);
+  border-radius:20px;
+  padding:3px 8px 3px 12px;
+  font-size:12px;color:var(--text);
+  max-width:240px;
+}
+.chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.chip-remove{
+  background:none!important;border:none!important;padding:0!important;
+  width:18px;height:18px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  color:rgba(254,254,254,.4);font-size:13px;line-height:1;cursor:pointer;
+  flex-shrink:0;
+  transition:color .15s,background .15s!important;
+}
+.chip-remove:hover{color:var(--pink)!important;background:rgba(227,128,207,.18)!important}
+
 /* ── Slider section ───────────────────────────────────────────────────────── */
 .slider-wrap{display:flex;align-items:center;gap:10px}
 .slider-wrap span{font-size:12px;color:var(--muted);white-space:nowrap}
@@ -316,14 +338,33 @@ tr:nth-child(even) td{background:rgba(254,254,254,.025)}
     <p class="subtitle">Compressez vos images en lot, sans réduction de qualité inutile</p>
   </header>
 
-  <!-- Source folder -->
+  <!-- Source -->
   <div class="card">
-    <div class="card-label">Dossier source</div>
-    <div class="input-row">
-      <input type="text" id="src" placeholder="Chemin du dossier…" oninput="onSrcChange()">
-      <button class="btn-ghost" onclick="pickFolder()">Parcourir…</button>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+      <div class="card-label" style="margin:0">Source</div>
+      <div class="pill-toggle">
+        <input type="radio" name="src-mode" id="mode-folder" value="folder" checked onchange="onModeChange()">
+        <label for="mode-folder">Dossier</label>
+        <input type="radio" name="src-mode" id="mode-files" value="files" onchange="onModeChange()">
+        <label for="mode-files">Fichiers</label>
+      </div>
     </div>
-    <div id="dst-label">Dossier de sortie : —</div>
+    <!-- Folder mode -->
+    <div id="folder-mode">
+      <div class="input-row">
+        <input type="text" id="src" placeholder="Chemin du dossier…" oninput="onSrcChange()">
+        <button class="btn-ghost" onclick="pickFolder()">Parcourir…</button>
+      </div>
+      <div id="dst-label">Dossier de sortie : —</div>
+    </div>
+    <!-- Files mode -->
+    <div id="files-mode" style="display:none">
+      <div class="input-row" style="margin-bottom:10px">
+        <button class="btn-ghost" onclick="pickFiles()">Choisir des fichiers…</button>
+        <span style="font-size:12px;color:var(--muted)" id="files-count"></span>
+      </div>
+      <div id="file-chips"></div>
+    </div>
   </div>
 
   <!-- Target size -->
@@ -460,7 +501,14 @@ function applyKb(){
   document.getElementById('size-disp').textContent=fmtKb(kb);
 }
 
-/* ── Folder ───────────────────────────────────────────────────────────────── */
+/* ── Source mode ──────────────────────────────────────────────────────────── */
+let selectedFiles=[];
+
+function onModeChange(){
+  const mode=document.querySelector('input[name=src-mode]:checked').value;
+  document.getElementById('folder-mode').style.display=mode==='folder'?'':'none';
+  document.getElementById('files-mode').style.display=mode==='files'?'':'none';
+}
 function onSrcChange(){
   const src=document.getElementById('src').value.trim();
   document.getElementById('dst-label').textContent=
@@ -472,6 +520,34 @@ async function pickFolder(){
     const d=await r.json();
     if(d.path){document.getElementById('src').value=d.path;onSrcChange();}
   }catch(e){console.error(e)}
+}
+async function pickFiles(){
+  try{
+    const r=await fetch('/api/pick-files');
+    const d=await r.json();
+    if(d.files&&d.files.length){
+      for(const f of d.files)if(!selectedFiles.includes(f))selectedFiles.push(f);
+      renderChips();
+    }
+  }catch(e){console.error(e)}
+}
+function renderChips(){
+  const container=document.getElementById('file-chips');
+  container.innerHTML='';
+  selectedFiles.forEach((fp,i)=>{
+    const name=fp.split('\\').pop().split('/').pop();
+    const chip=document.createElement('div');
+    chip.className='chip';
+    chip.innerHTML=`<span title="${esc(fp)}">${esc(name)}</span>`+
+      `<button class="chip-remove" onclick="removeFile(${i})" title="Retirer">✕</button>`;
+    container.appendChild(chip);
+  });
+  const n=selectedFiles.length;
+  document.getElementById('files-count').textContent=n?`${n} fichier(s) sélectionné(s)`:'';
+}
+function removeFile(i){
+  selectedFiles.splice(i,1);
+  renderChips();
 }
 
 /* ── Toggle sections ──────────────────────────────────────────────────────── */
@@ -490,16 +566,23 @@ function updatePreview(){
   const val=document.getElementById('alt-value').value;
   const mode=document.querySelector('input[name=alt-mode]:checked').value;
   const base=cleanFilename(SAMPLE);
-  const result=mode==='prefix'?val+base:base+val;
-  document.getElementById('prev-val').textContent=result||'—';
+  const result=mode==='prefix'?val+' '+base:base+' '+val;
+  document.getElementById('prev-val').textContent=(val?result:base)||'—';
 }
 
 /* ── Start / Cancel ───────────────────────────────────────────────────────── */
 let abort=null;
 
 async function start(){
-  const src=document.getElementById('src').value.trim();
-  if(!src){alert('Veuillez sélectionner un dossier source.');return;}
+  const srcMode=document.querySelector('input[name=src-mode]:checked').value;
+  let folder='',files=[];
+  if(srcMode==='folder'){
+    folder=document.getElementById('src').value.trim();
+    if(!folder){alert('Veuillez sélectionner un dossier source.');return;}
+  }else{
+    files=selectedFiles.slice();
+    if(!files.length){alert('Veuillez sélectionner au moins un fichier.');return;}
+  }
 
   const kb=parseInt(document.getElementById('kb-input').value)||100;
   const target=Math.max(MIN,Math.min(MAX,kb))*1024;
@@ -531,7 +614,7 @@ async function start(){
     const resp=await fetch('/api/compress',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({folder:src,target,maxW,maxH,altText,altValue,altMode}),
+      body:JSON.stringify({folder,files,target,maxW,maxH,altText,altValue,altMode}),
       signal:abort.signal
     });
     const reader=resp.body.getReader();

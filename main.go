@@ -34,14 +34,17 @@ var indexHTML []byte
 // ---------------------------------------------------------------------------
 
 type compressReq struct {
-	Folder   string `json:"folder"`
-	Target   int    `json:"target"` // bytes
-	MaxW     int    `json:"maxW"`
-	MaxH     int    `json:"maxH"`
-	AltText  bool   `json:"altText"`  // inject Iptc4xmpCore:AltTextAccessibility
-	AltValue string `json:"altValue"` // prefix or suffix literal
-	AltMode  string `json:"altMode"`  // "prefix" | "suffix"
+	Folder   string   `json:"folder"`
+	Files    []string `json:"files"`
+	Target   int      `json:"target"` // bytes
+	MaxW     int      `json:"maxW"`
+	MaxH     int      `json:"maxH"`
+	AltText  bool     `json:"altText"`  // inject Iptc4xmpCore:AltTextAccessibility
+	AltValue string   `json:"altValue"` // prefix or suffix literal
+	AltMode  string   `json:"altMode"`  // "prefix" | "suffix"
 }
+
+type fileJob struct{ src, dst, rel string }
 
 type progressEvent struct {
 	Type    string `json:"type"` // "start" | "result" | "done"
@@ -75,6 +78,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleIndex)
 	mux.HandleFunc("/api/pick-folder", handlePickFolder)
+	mux.HandleFunc("/api/pick-files", handlePickFiles)
 	mux.HandleFunc("/api/compress", handleCompress)
 	mux.HandleFunc("/api/quit", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -114,6 +118,27 @@ func handlePickFolder(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"path": path}) //nolint
 }
 
+func handlePickFiles(w http.ResponseWriter, r *http.Request) {
+	script := `Add-Type -AssemblyName System.Windows.Forms; ` +
+		`$d = New-Object System.Windows.Forms.OpenFileDialog; ` +
+		`$d.Title = 'Sélectionner des images'; ` +
+		`$d.Filter = 'Images|*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.tiff;*.tif|Tous les fichiers|*.*'; ` +
+		`$d.Multiselect = $true; ` +
+		`if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $d.FileNames -join "|" } else { '' }`
+	out, err := exec.Command("powershell", "-WindowStyle", "Hidden", "-Command", script).Output()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	raw := strings.TrimSpace(string(out))
+	var files []string
+	if raw != "" {
+		files = strings.Split(raw, "|")
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"files": files}) //nolint
+}
+
 func handleCompress(w http.ResponseWriter, r *http.Request) {
 	var req compressReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -133,13 +158,30 @@ func handleCompress(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	dstBase := filepath.Join(req.Folder, "compress")
-	files, err := findImages(req.Folder, dstBase)
-	if err != nil {
-		send(progressEvent{Type: "done"})
-		return
+	var jobs []fileJob
+	if len(req.Files) > 0 {
+		for _, fp := range req.Files {
+			if !supportedExts[strings.ToLower(filepath.Ext(fp))] {
+				continue
+			}
+			base := filepath.Base(fp)
+			dst := filepath.Join(filepath.Dir(fp), "compress", base)
+			jobs = append(jobs, fileJob{src: fp, dst: dst, rel: base})
+		}
+	} else if req.Folder != "" {
+		dstBase := filepath.Join(req.Folder, "compress")
+		found, err := findImages(req.Folder, dstBase)
+		if err != nil {
+			send(progressEvent{Type: "done"})
+			return
+		}
+		for _, fp := range found {
+			rel, _ := filepath.Rel(req.Folder, fp)
+			dst := filepath.Join(dstBase, rel)
+			jobs = append(jobs, fileJob{src: fp, dst: dst, rel: rel})
+		}
 	}
-	total := len(files)
+	total := len(jobs)
 	if total == 0 {
 		send(progressEvent{Type: "done"})
 		return
@@ -148,22 +190,20 @@ func handleCompress(w http.ResponseWriter, r *http.Request) {
 	var ok, skip, errCount int
 	var saved int64
 
-	for i, fp := range files {
+	for i, job := range jobs {
 		select {
 		case <-r.Context().Done():
 			return
 		default:
 		}
 
-		rel, _ := filepath.Rel(req.Folder, fp)
-		send(progressEvent{Type: "start", Index: i, Total: total, File: rel})
+		send(progressEvent{Type: "start", Index: i, Total: total, File: job.rel})
 
-		dst := filepath.Join(dstBase, rel)
 		altVal := ""
 		if req.AltText {
 			altVal = req.AltValue
 		}
-		status, orig, final, msg := compressFile(fp, dst, req.Target, req.MaxW, req.MaxH, altVal, req.AltMode)
+		status, orig, final, msg := compressFile(job.src, job.dst, req.Target, req.MaxW, req.MaxH, altVal, req.AltMode)
 
 		switch status {
 		case "success":
@@ -187,7 +227,7 @@ func handleCompress(w http.ResponseWriter, r *http.Request) {
 		send(progressEvent{
 			Type:    "result",
 			Index:   i,
-			File:    rel,
+			File:    job.rel,
 			OrigStr: fmtSize(orig),
 			CompStr: compStr,
 			Ratio:   ratio,
@@ -262,7 +302,30 @@ func compressFile(src, dst string, target, maxW, maxH int, altValue, altMode str
 
 	// Skip if already within all constraints
 	if !needsPx && convertNote == "" && orig <= int64(target) {
-		return "skip", orig, orig, "Déjà sous le seuil"
+		if altValue == "" {
+			return "skip", orig, orig, "Déjà sous le seuil"
+		}
+		origData, readErr := os.ReadFile(src)
+		if readErr != nil {
+			return "error", orig, 0, readErr.Error()
+		}
+		alt := buildAltText(filepath.Base(src), altValue, altMode)
+		var withXMP []byte
+		switch outExt {
+		case ".jpg", ".jpeg":
+			withXMP = injectXMPJPEG(origData, alt)
+		case ".png":
+			withXMP = injectXMPPNG(origData, alt)
+		default:
+			return "skip", orig, orig, "Déjà sous le seuil"
+		}
+		if mkdirErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkdirErr != nil {
+			return "error", orig, 0, mkdirErr.Error()
+		}
+		if writeErr := os.WriteFile(dst, withXMP, 0o644); writeErr != nil {
+			return "error", orig, 0, writeErr.Error()
+		}
+		return "success", orig, orig, "Alt injecté (taille OK)"
 	}
 
 	outPath := dst
@@ -316,8 +379,8 @@ func compressJPEG(img image.Image, target, W, H int, pxLabel string) ([]byte, st
 		return buf.Bytes(), true
 	}
 
-	// Step 1: binary-search quality at full resolution
-	lo, hi := 10, 95
+	// Step 1: binary-search quality at full resolution (floor = 75 to preserve quality)
+	lo, hi := 75, 95
 	var best []byte
 	for lo <= hi {
 		mid := (lo + hi) / 2
@@ -331,26 +394,25 @@ func compressJPEG(img image.Image, target, W, H int, pxLabel string) ([]byte, st
 		return best, label(pxLabel, "qualité réduite")
 	}
 
-	// Step 2: find the LARGEST scale where even quality=1 fits, then maximise quality.
-	// Probing with quality=1 (worst case) ensures we don't shrink dimensions more than
-	// strictly necessary.
+	// Step 2: find the LARGEST scale where quality=75 still fits, then maximise quality.
+	// Probing at the quality floor ensures minimum acceptable quality at each scale.
 	loS, hiS := 5, 95
 	bestScale := 0
 	for loS <= hiS {
 		midS := (loS + hiS) / 2
 		nw, nh := max(W*midS/100, 8), max(H*midS/100, 8)
-		if d, ok := enc(resizeImg(img, nw, nh), 1); ok && len(d) <= target {
+		if d, ok := enc(resizeImg(img, nw, nh), 75); ok && len(d) <= target {
 			bestScale = midS
 			loS = midS + 1 // still fits — try a larger (less aggressive) scale
 		} else {
-			hiS = midS - 1 // doesn't fit even at q=1 — must go smaller
+			hiS = midS - 1 // doesn't fit even at q=75 — must go smaller
 		}
 	}
 	if bestScale > 0 {
 		nw, nh := max(W*bestScale/100, 8), max(H*bestScale/100, 8)
 		r := resizeImg(img, nw, nh)
 		// Maximise quality at this scale to get as close to target as possible
-		lo, hi = 10, 95
+		lo, hi = 75, 95
 		var bestD []byte
 		for lo <= hi {
 			mid := (lo + hi) / 2
@@ -361,7 +423,7 @@ func compressJPEG(img image.Image, target, W, H int, pxLabel string) ([]byte, st
 			}
 		}
 		if bestD == nil {
-			bestD, _ = enc(r, 1)
+			bestD, _ = enc(r, 75)
 		}
 		return bestD, label(pxLabel, fmt.Sprintf("redimensionné %d×%d", nw, nh))
 	}
@@ -474,9 +536,9 @@ func buildAltText(filename, value, mode string) string {
 	base := strings.TrimSuffix(filename, filepath.Ext(filename))
 	cleaned := strings.NewReplacer("-", " ", "_", " ").Replace(base)
 	if mode == "suffix" {
-		return cleaned + value
+		return cleaned + " " + value
 	}
-	return value + cleaned
+	return value + " " + cleaned
 }
 
 // ---------------------------------------------------------------------------
