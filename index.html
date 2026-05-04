@@ -70,42 +70,24 @@ h1{
 }
 
 /* ── Toggle switch ────────────────────────────────────────────────────────── */
-.card-toggle{
-  display:flex;align-items:center;gap:12px;cursor:pointer;
-  user-select:none;
-}
+.card-toggle{display:flex;align-items:center;gap:12px;cursor:pointer;user-select:none}
 .card-toggle .card-label{margin:0}
 .switch{position:relative;width:42px;height:24px;flex-shrink:0}
 .switch input{opacity:0;width:0;height:0;position:absolute}
 .knob{
   position:absolute;inset:0;
   background:rgba(254,254,254,.15);
-  border-radius:24px;
-  transition:.3s;
+  border-radius:24px;transition:.3s;
 }
 .knob::before{
   content:'';position:absolute;
-  width:18px;height:18px;
-  left:3px;top:3px;
+  width:18px;height:18px;left:3px;top:3px;
   background:rgba(254,254,254,.55);
-  border-radius:50%;
-  transition:.3s;
+  border-radius:50%;transition:.3s;
   box-shadow:0 1px 4px rgba(0,0,0,.3);
 }
-.switch input:checked~.knob{
-  background:linear-gradient(135deg,var(--teal),var(--pink));
-}
-.switch input:checked~.knob::before{
-  transform:translateX(18px);
-  background:var(--white);
-}
-.badge{
-  font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
-  padding:2px 8px;border-radius:20px;
-  background:linear-gradient(135deg,rgba(0,207,180,.25),rgba(0,207,180,.1));
-  border:1px solid rgba(0,207,180,.35);
-  color:var(--teal);
-}
+.switch input:checked~.knob{background:linear-gradient(135deg,var(--teal),var(--pink))}
+.switch input:checked~.knob::before{transform:translateX(18px);background:var(--white)}
 
 /* ── Collapsible extra ────────────────────────────────────────────────────── */
 .card-extra{
@@ -122,8 +104,7 @@ input[type=text],input[type=number]{
   border-radius:9px;
   padding:8px 12px;
   font-size:14px;font-family:inherit;
-  color:var(--white);
-  outline:none;
+  color:var(--white);outline:none;
   transition:border-color .2s,background .2s;
 }
 input[type=text]:focus,input[type=number]:focus{
@@ -136,8 +117,7 @@ input[type=number]::-webkit-inner-spin-button{opacity:.4}
 /* ── Buttons ──────────────────────────────────────────────────────────────── */
 button{
   border:none;border-radius:9px;
-  padding:8px 16px;
-  font-size:14px;font-family:inherit;
+  padding:8px 16px;font-size:14px;font-family:inherit;
   cursor:pointer;
   transition:opacity .15s,transform .1s,box-shadow .2s;
   white-space:nowrap;
@@ -159,44 +139,74 @@ button:not(:disabled):active{transform:scale(.97)}
   box-shadow:0 4px 20px rgba(227,128,207,.35);
 }
 .btn-primary:not(:disabled):hover{
-  box-shadow:0 6px 28px rgba(227,128,207,.5);
-  opacity:.92;
+  box-shadow:0 6px 28px rgba(227,128,207,.5);opacity:.92;
 }
 
 .btn-danger{
   background:rgba(227,128,207,.18);
   border:1px solid rgba(227,128,207,.3);
-  color:var(--pink);
-  padding:11px 18px;
+  color:var(--pink);padding:11px 18px;
 }
 .btn-danger:not(:disabled):hover{background:rgba(227,128,207,.28)}
 
-/* ── Folder row ───────────────────────────────────────────────────────────── */
+.btn-teal{
+  background:rgba(0,207,180,.15);
+  border:1px solid rgba(0,207,180,.3);
+  color:var(--teal);
+}
+.btn-teal:not(:disabled):hover{background:rgba(0,207,180,.25)}
+
+/* ── Source card ──────────────────────────────────────────────────────────── */
 .input-row{display:flex;gap:8px;align-items:center}
 .input-row input[type=text]{flex:1}
 #dst-label{margin-top:8px;font-size:12px;color:var(--muted)}
 
-/* ── File chips ────────────────────────────────────────────────────────────── */
+/* ── File chips ───────────────────────────────────────────────────────────── */
 #file-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
 .chip{
   display:flex;align-items:center;gap:5px;
   background:rgba(254,254,254,.10);
   border:1px solid var(--glass-border);
-  border-radius:20px;
-  padding:3px 8px 3px 12px;
-  font-size:12px;color:var(--text);
-  max-width:240px;
+  border-radius:20px;padding:3px 8px 3px 12px;
+  font-size:12px;color:var(--text);max-width:260px;
 }
 .chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .chip-remove{
   background:none!important;border:none!important;padding:0!important;
   width:18px;height:18px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
-  color:rgba(254,254,254,.4);font-size:13px;line-height:1;cursor:pointer;
-  flex-shrink:0;
-  transition:color .15s,background .15s!important;
+  color:rgba(254,254,254,.4);font-size:13px;line-height:1;cursor:pointer;flex-shrink:0;
+  transition:color .15s;
 }
-.chip-remove:hover{color:var(--pink)!important;background:rgba(227,128,207,.18)!important}
+.chip-remove:hover{color:var(--pink)!important}
+
+/* ── Scan results ─────────────────────────────────────────────────────────── */
+.scan-panel{
+  margin-top:14px;padding-top:14px;
+  border-top:1px solid var(--glass-border);
+}
+.scan-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);
+  gap:8px;margin-bottom:14px;
+}
+.scan-stat{
+  background:rgba(254,254,254,.05);
+  border:1px solid var(--glass-border);
+  border-radius:9px;padding:8px 12px;text-align:center;
+}
+.scan-stat .s-val{
+  font-size:1rem;font-weight:700;
+  background:linear-gradient(135deg,var(--teal),var(--pink));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  display:block;
+}
+.scan-stat .s-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.bucket-list{display:flex;flex-direction:column;gap:5px}
+.bucket-row{display:flex;align-items:center;gap:10px;font-size:12px}
+.bucket-row .b-lbl{color:var(--muted);width:110px;flex-shrink:0}
+.bucket-bar-wrap{flex:1;height:6px;background:rgba(254,254,254,.08);border-radius:6px;overflow:hidden}
+.bucket-bar{height:100%;background:linear-gradient(90deg,var(--teal),var(--pink));border-radius:6px;transition:width .4s ease}
+.bucket-row .b-count{color:var(--text);width:70px;text-align:right;flex-shrink:0}
 
 /* ── Slider section ───────────────────────────────────────────────────────── */
 .slider-wrap{display:flex;align-items:center;gap:10px}
@@ -212,14 +222,12 @@ input[type=range]::-webkit-slider-thumb{
   width:18px;height:18px;border-radius:50%;
   background:linear-gradient(135deg,var(--teal),var(--pink));
   box-shadow:0 2px 8px rgba(0,207,180,.5);
-  cursor:pointer;
-  transition:box-shadow .2s;
+  cursor:pointer;transition:box-shadow .2s;
 }
-input[type=range]::-webkit-slider-thumb:hover{
-  box-shadow:0 2px 16px rgba(0,207,180,.7);
-}
+input[type=range]::-webkit-slider-thumb:hover{box-shadow:0 2px 16px rgba(0,207,180,.7)}
 .size-row{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
-.size-val{font-size:1.1rem;font-weight:800;
+.size-val{
+  font-size:1.1rem;font-weight:800;
   background:linear-gradient(135deg,var(--teal),var(--pink));
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
 }
@@ -232,67 +240,41 @@ input[type=range]::-webkit-slider-thumb:hover{
 }
 .btn-apply:not(:disabled):hover{background:rgba(0,207,180,.25)}
 
-/* ── Pixel dims & alt-text extras ─────────────────────────────────────────── */
+/* ── Priority slider ──────────────────────────────────────────────────────── */
+.priority-wrap{display:flex;align-items:center;gap:12px}
+.priority-wrap .p-lbl-q{font-size:12px;font-weight:600;color:var(--teal);white-space:nowrap}
+.priority-wrap .p-lbl-c{font-size:12px;font-weight:600;color:var(--pink);white-space:nowrap}
+#priority-desc{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.5}
+
+/* ── Pixel dims ───────────────────────────────────────────────────────────── */
 .fields-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .field-group{display:flex;align-items:center;gap:6px}
 .field-group label{font-size:13px;color:var(--muted);white-space:nowrap}
 .field-group input[type=number]{width:82px}
 .hint{font-size:11.5px;color:var(--muted);margin-left:4px}
 
-/* mode pill toggle */
+/* ── Pill toggle ──────────────────────────────────────────────────────────── */
 .pill-toggle{
-  display:flex;
-  background:rgba(254,254,254,.07);
+  display:flex;background:rgba(254,254,254,.07);
   border:1px solid var(--glass-border);
-  border-radius:8px;
-  padding:3px;gap:2px;
+  border-radius:8px;padding:3px;gap:2px;
 }
 .pill-toggle input{display:none}
 .pill-toggle label{
-  padding:5px 16px;border-radius:6px;
-  cursor:pointer;font-size:13px;
-  color:var(--muted);
-  transition:background .2s,color .2s;
+  padding:5px 16px;border-radius:6px;cursor:pointer;font-size:13px;
+  color:var(--muted);transition:background .2s,color .2s;
 }
 .pill-toggle input:checked+label{
   background:linear-gradient(135deg,rgba(0,207,180,.25),rgba(227,128,207,.2));
   color:var(--white);
 }
 
-.alt-text-row{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
-.alt-text-row input[type=text]{flex:1;min-width:180px}
-
-.preview-box{
-  margin-top:12px;
-  background:rgba(254,254,254,.05);
-  border:1px solid var(--glass-border);
-  border-radius:8px;
-  padding:9px 13px;
-  font-size:12.5px;
-}
-.preview-box .label{color:var(--muted);margin-right:6px}
-.preview-val{
-  font-weight:600;
-  background:linear-gradient(90deg,var(--orange),var(--pink));
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-}
-
 /* ── Action card ──────────────────────────────────────────────────────────── */
 .action-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 #summary{font-size:12px;color:var(--muted);margin-left:auto;text-align:right;line-height:1.5}
-
 .prog-wrap{display:flex;align-items:center;gap:12px;margin-top:16px}
-.prog-track{
-  flex:1;height:7px;
-  background:rgba(254,254,254,.1);
-  border-radius:7px;overflow:hidden;
-}
-.prog-bar{
-  height:100%;width:0%;
-  background:linear-gradient(90deg,var(--teal),var(--pink));
-  border-radius:7px;
-  transition:width .25s ease;
-}
+.prog-track{flex:1;height:7px;background:rgba(254,254,254,.1);border-radius:7px;overflow:hidden}
+.prog-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--teal),var(--pink));border-radius:7px;transition:width .25s ease}
 #prog-label{font-size:12px;color:var(--muted);width:74px;text-align:right;white-space:nowrap}
 
 /* ── Results table ────────────────────────────────────────────────────────── */
@@ -303,28 +285,25 @@ th{
   padding:10px 14px;text-align:left;
   background:rgba(254,254,254,.05);
   border-bottom:1px solid var(--glass-border);
-  color:var(--muted);font-size:11px;font-weight:700;
-  text-transform:uppercase;letter-spacing:.07em;
-  position:sticky;top:0;
-  backdrop-filter:blur(10px);
+  color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+  position:sticky;top:0;backdrop-filter:blur(10px);
 }
 th:nth-child(2),th:nth-child(3),th:nth-child(4){text-align:right}
 td{padding:7px 14px;border-bottom:1px solid rgba(254,254,254,.04);color:var(--text)}
 td:nth-child(2),td:nth-child(3),td:nth-child(4){text-align:right;font-variant-numeric:tabular-nums}
 tr:last-child td{border-bottom:none}
-tr.running td{color:rgba(255,174,61,.7)}
-tr.success td:last-child{color:var(--teal)}
-tr.skip    td:last-child{color:var(--orange)}
-tr.error   td:last-child{color:var(--pink)}
+tr.running  td{color:rgba(255,174,61,.7)}
+tr.success  td:last-child{color:var(--teal)}
+tr.partial  td:last-child{color:var(--orange)}
+tr.skip     td:last-child{color:rgba(254,254,254,.4)}
+tr.error    td:last-child{color:var(--pink)}
 tr:nth-child(even) td{background:rgba(254,254,254,.025)}
 
-/* ── Quit link ────────────────────────────────────────────────────────────── */
+/* ── Quit ─────────────────────────────────────────────────────────────────── */
 #quit{
-  display:block;text-align:center;
-  margin-top:18px;font-size:12px;color:rgba(254,254,254,.2);
-  cursor:pointer;background:none;border:none;
-  font-family:inherit;
-  transition:color .2s;
+  display:block;text-align:center;margin-top:18px;
+  font-size:12px;color:rgba(254,254,254,.2);cursor:pointer;
+  background:none;border:none;font-family:inherit;transition:color .2s;
 }
 #quit:hover{color:rgba(254,254,254,.5)}
 </style>
@@ -361,15 +340,25 @@ tr:nth-child(even) td{background:rgba(254,254,254,.025)}
     <div id="files-mode" style="display:none">
       <div class="input-row" style="margin-bottom:10px">
         <button class="btn-ghost" onclick="pickFiles()">Choisir des fichiers…</button>
-        <span style="font-size:12px;color:var(--muted)" id="files-count"></span>
+        <span style="font-size:12px;color:var(--muted);margin-left:4px" id="files-count"></span>
       </div>
       <div id="file-chips"></div>
+    </div>
+    <!-- Scan button + results -->
+    <div id="scan-bar" style="display:none;margin-top:14px">
+      <button class="btn-teal" id="btn-scan" onclick="doScan()" style="font-size:13px;padding:6px 14px">
+        ⟳ Analyser le contenu
+      </button>
+    </div>
+    <div id="scan-panel" class="scan-panel" style="display:none">
+      <div class="scan-grid" id="scan-grid"></div>
+      <div class="bucket-list" id="bucket-list"></div>
     </div>
   </div>
 
   <!-- Target size -->
   <div class="card">
-    <div class="card-label">Taille cible maximale</div>
+    <div class="card-label">Taille cible maximale par fichier</div>
     <div class="slider-wrap">
       <span>10 KB</span>
       <input type="range" id="slider" min="0" max="100" step="0.1" value="61.93" oninput="onSlide()">
@@ -382,6 +371,17 @@ tr:nth-child(even) td{background:rgba(254,254,254,.025)}
       <input type="number" id="kb-input" value="100" min="10" max="10240">
       <button class="btn-apply" onclick="applyKb()">Appliquer</button>
     </div>
+  </div>
+
+  <!-- Priority -->
+  <div class="card">
+    <div class="card-label">Priorité qualité / compression</div>
+    <div class="priority-wrap">
+      <span class="p-lbl-q">Qualité</span>
+      <input type="range" id="priority" min="0" max="100" value="30" oninput="onPriority()">
+      <span class="p-lbl-c">Compression</span>
+    </div>
+    <div id="priority-desc"></div>
   </div>
 
   <!-- Pixel dimensions -->
@@ -411,33 +411,6 @@ tr:nth-child(even) td{background:rgba(254,254,254,.025)}
     </div>
   </div>
 
-  <!-- Alt text accessibility -->
-  <div class="card">
-    <label class="card-toggle">
-      <div class="switch">
-        <input type="checkbox" id="alt-check" onchange="toggleSection('alt-check','alt-opts')">
-        <span class="knob"></span>
-      </div>
-      <span class="card-label">Texte alternatif d'accessibilité</span>
-      <span class="badge">WordPress</span>
-    </label>
-    <div class="card-extra" id="alt-opts" style="display:none">
-      <div class="alt-text-row">
-        <div class="pill-toggle">
-          <input type="radio" name="alt-mode" id="m-prefix" value="prefix" checked onchange="updatePreview()">
-          <label for="m-prefix">Préfixe</label>
-          <input type="radio" name="alt-mode" id="m-suffix" value="suffix" onchange="updatePreview()">
-          <label for="m-suffix">Suffixe</label>
-        </div>
-        <input type="text" id="alt-value" placeholder="Valeur…" oninput="updatePreview()">
-      </div>
-      <div class="preview-box" id="alt-preview">
-        <span class="label">Aperçu :</span>
-        <span class="preview-val" id="prev-val">—</span>
-      </div>
-    </div>
-  </div>
-
   <!-- Actions -->
   <div class="card">
     <div class="action-row">
@@ -459,7 +432,7 @@ tr:nth-child(even) td{background:rgba(254,254,254,.025)}
           <tr>
             <th>Fichier</th>
             <th>Original</th>
-            <th>Compressé</th>
+            <th>Résultat</th>
             <th>Ratio</th>
             <th>Statut</th>
           </tr>
@@ -475,7 +448,6 @@ tr:nth-child(even) td{background:rgba(254,254,254,.025)}
 
 <script>
 const MIN=10,MAX=10240;
-const SAMPLE='exemple-image_01';
 
 /* ── Slider log scale ─────────────────────────────────────────────────────── */
 function slToKb(v){
@@ -501,6 +473,21 @@ function applyKb(){
   document.getElementById('size-disp').textContent=fmtKb(kb);
 }
 
+/* ── Priority ─────────────────────────────────────────────────────────────── */
+const PRIORITY_LABELS=[
+  [0,  20, 'Haute qualité — compression légère (JPEG ≥ 83)'],
+  [21, 45, 'Qualité élevée — bonne réduction de taille (JPEG ≥ 75)'],
+  [46, 65, 'Équilibré — qualité acceptable, compression efficace (JPEG ≥ 68)'],
+  [66, 85, 'Compression accrue — réduction agressive (JPEG ≥ 58)'],
+  [86,100, 'Compression maximale — réduction très agressive (JPEG ≥ 50)'],
+];
+function onPriority(){
+  const v=parseInt(document.getElementById('priority').value);
+  const row=PRIORITY_LABELS.find(r=>v>=r[0]&&v<=r[1]);
+  document.getElementById('priority-desc').textContent=row?row[2]:'';
+}
+onPriority();
+
 /* ── Source mode ──────────────────────────────────────────────────────────── */
 let selectedFiles=[];
 
@@ -508,19 +495,42 @@ function onModeChange(){
   const mode=document.querySelector('input[name=src-mode]:checked').value;
   document.getElementById('folder-mode').style.display=mode==='folder'?'':'none';
   document.getElementById('files-mode').style.display=mode==='files'?'':'none';
+  updateScanBar();
+  hideScan();
 }
+
 function onSrcChange(){
   const src=document.getElementById('src').value.trim();
   document.getElementById('dst-label').textContent=
     src?`Dossier de sortie : ${src}\\compress`:'Dossier de sortie : —';
+  updateScanBar();
+  hideScan();
 }
+
+function updateScanBar(){
+  const mode=document.querySelector('input[name=src-mode]:checked').value;
+  const hasSource=mode==='folder'
+    ?document.getElementById('src').value.trim()!==''
+    :selectedFiles.length>0;
+  document.getElementById('scan-bar').style.display=hasSource?'':'none';
+}
+
+function hideScan(){
+  document.getElementById('scan-panel').style.display='none';
+}
+
 async function pickFolder(){
   try{
     const r=await fetch('/api/pick-folder');
     const d=await r.json();
-    if(d.path){document.getElementById('src').value=d.path;onSrcChange();}
+    if(d.path){
+      document.getElementById('src').value=d.path;
+      onSrcChange();
+      doScan();
+    }
   }catch(e){console.error(e)}
 }
+
 async function pickFiles(){
   try{
     const r=await fetch('/api/pick-files');
@@ -528,9 +538,12 @@ async function pickFiles(){
     if(d.files&&d.files.length){
       for(const f of d.files)if(!selectedFiles.includes(f))selectedFiles.push(f);
       renderChips();
+      updateScanBar();
+      hideScan();
     }
   }catch(e){console.error(e)}
 }
+
 function renderChips(){
   const container=document.getElementById('file-chips');
   container.innerHTML='';
@@ -545,29 +558,64 @@ function renderChips(){
   const n=selectedFiles.length;
   document.getElementById('files-count').textContent=n?`${n} fichier(s) sélectionné(s)`:'';
 }
+
 function removeFile(i){
   selectedFiles.splice(i,1);
   renderChips();
+  updateScanBar();
+  hideScan();
+}
+
+/* ── Scan ─────────────────────────────────────────────────────────────────── */
+async function doScan(){
+  const btn=document.getElementById('btn-scan');
+  btn.disabled=true;
+  btn.textContent='⟳ Analyse en cours…';
+  try{
+    const mode=document.querySelector('input[name=src-mode]:checked').value;
+    const body=mode==='folder'
+      ?{folder:document.getElementById('src').value.trim(),files:[]}
+      :{folder:'',files:selectedFiles};
+    const r=await fetch('/api/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    renderScan(d);
+  }catch(e){console.error(e)}
+  btn.disabled=false;
+  btn.textContent='⟳ Analyser le contenu';
+}
+
+function renderScan(d){
+  const panel=document.getElementById('scan-panel');
+  if(!d||!d.count){panel.style.display='none';return;}
+
+  const grid=document.getElementById('scan-grid');
+  grid.innerHTML=[
+    ['Fichiers',d.count],
+    ['Total',d.total],
+    ['Min',d.min],
+    ['Max',d.max],
+  ].map(([lbl,val])=>
+    `<div class="scan-stat"><span class="s-val">${esc(String(val))}</span><span class="s-lbl">${lbl}</span></div>`
+  ).join('');
+
+  const maxCount=Math.max(...(d.buckets||[]).map(b=>b.count),1);
+  const bl=document.getElementById('bucket-list');
+  bl.innerHTML=(d.buckets||[]).map(b=>{
+    const pct=Math.round(b.count/maxCount*100);
+    return `<div class="bucket-row">
+      <span class="b-lbl">${esc(b.label)}</span>
+      <div class="bucket-bar-wrap"><div class="bucket-bar" style="width:${pct}%"></div></div>
+      <span class="b-count">${b.count} fichier${b.count>1?'s':''} — ${esc(b.size)}</span>
+    </div>`;
+  }).join('');
+
+  panel.style.display='';
 }
 
 /* ── Toggle sections ──────────────────────────────────────────────────────── */
 function toggleSection(checkId,bodyId){
   const show=document.getElementById(checkId).checked;
   document.getElementById(bodyId).style.display=show?'block':'none';
-  if(checkId==='alt-check')updatePreview();
-}
-
-/* ── Alt text preview ─────────────────────────────────────────────────────── */
-function cleanFilename(name){
-  // remove extension, replace - and _ with spaces, preserve case
-  return name.replace(/\.[^.]+$/,'').replace(/[-_]/g,' ');
-}
-function updatePreview(){
-  const val=document.getElementById('alt-value').value;
-  const mode=document.querySelector('input[name=alt-mode]:checked').value;
-  const base=cleanFilename(SAMPLE);
-  const result=mode==='prefix'?val+' '+base:base+' '+val;
-  document.getElementById('prev-val').textContent=(val?result:base)||'—';
 }
 
 /* ── Start / Cancel ───────────────────────────────────────────────────────── */
@@ -586,6 +634,7 @@ async function start(){
 
   const kb=parseInt(document.getElementById('kb-input').value)||100;
   const target=Math.max(MIN,Math.min(MAX,kb))*1024;
+  const priority=parseInt(document.getElementById('priority').value)||0;
 
   let maxW=0,maxH=0;
   if(document.getElementById('px-check').checked){
@@ -594,14 +643,6 @@ async function start(){
     if(!maxW&&!maxH){alert('Activez au moins une dimension en pixels.');return;}
   }
 
-  const altText=document.getElementById('alt-check').checked;
-  const altValue=document.getElementById('alt-value').value;
-  const altMode=document.querySelector('input[name=alt-mode]:checked').value;
-  if(altText&&!altValue.trim()){
-    alert('Veuillez saisir une valeur pour le texte alternatif.');return;
-  }
-
-  // Reset UI
   document.getElementById('tbody').innerHTML='';
   document.getElementById('prog-bar').style.width='0%';
   document.getElementById('prog-label').textContent='';
@@ -614,7 +655,7 @@ async function start(){
     const resp=await fetch('/api/compress',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({folder,files,target,maxW,maxH,altText,altValue,altMode}),
+      body:JSON.stringify({folder,files,target,maxW,maxH,priority}),
       signal:abort.signal
     });
     const reader=resp.body.getReader();
@@ -650,15 +691,18 @@ function handleEvent(ev){
     const tr=document.getElementById('r'+ev.index);
     if(!tr)return;
     tr.className=ev.status;
-    const ic={success:'✓',skip:'→',error:'✗'};
-    tr.innerHTML=`<td>${esc(ev.file)}</td><td>${ev.origStr}</td><td>${ev.compStr}</td><td>${ev.ratio}</td><td>${ic[ev.status]||''} ${esc(ev.message)}</td>`;
+    const ic={success:'✓',partial:'~',skip:'→',error:'✗'};
+    tr.innerHTML=`<td>${esc(ev.file)}</td><td>${ev.origStr}</td><td>${ev.compStr}</td><td>${ev.ratio}</td>`+
+      `<td>${ic[ev.status]||''} ${esc(ev.message)}</td>`;
 
   }else if(ev.type==='done'){
     document.getElementById('prog-bar').style.width='100%';
     document.getElementById('prog-label').textContent='Terminé';
     document.getElementById('btn-start').disabled=false;
     document.getElementById('btn-cancel').disabled=true;
-    let s=`✓ ${ev.ok} compressée(s)&nbsp;&nbsp;→ ${ev.skip} ignorée(s)&nbsp;&nbsp;✗ ${ev.err} erreur(s)`;
+    let s=`✓ ${ev.ok} compressée(s)`;
+    if(ev.partial)s+=`&nbsp;&nbsp;~ ${ev.partial} meilleur effort`;
+    s+=`&nbsp;&nbsp;→ ${ev.skip} ignorée(s)&nbsp;&nbsp;✗ ${ev.err} erreur(s)`;
     if(ev.saved&&ev.saved!=='0 B')s+=`<br>Espace économisé : <strong>${ev.saved}</strong>`;
     document.getElementById('summary').innerHTML=s;
   }

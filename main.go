@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"hash/crc32"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -36,12 +35,10 @@ var indexHTML []byte
 type compressReq struct {
 	Folder   string   `json:"folder"`
 	Files    []string `json:"files"`
-	Target   int      `json:"target"` // bytes
+	Target   int      `json:"target"`   // bytes
 	MaxW     int      `json:"maxW"`
 	MaxH     int      `json:"maxH"`
-	AltText  bool     `json:"altText"`  // inject Iptc4xmpCore:AltTextAccessibility
-	AltValue string   `json:"altValue"` // prefix or suffix literal
-	AltMode  string   `json:"altMode"`  // "prefix" | "suffix"
+	Priority int      `json:"priority"` // 0 = max quality, 100 = max compression
 }
 
 type fileJob struct{ src, dst, rel string }
@@ -58,8 +55,29 @@ type progressEvent struct {
 	Message string `json:"message,omitempty"`
 	OK      int    `json:"ok,omitempty"`
 	Skip    int    `json:"skip,omitempty"`
+	Partial int    `json:"partial,omitempty"`
 	Err     int    `json:"err,omitempty"`
 	Saved   string `json:"saved,omitempty"`
+}
+
+type scanReq struct {
+	Folder string   `json:"folder"`
+	Files  []string `json:"files"`
+}
+
+type bucketInfo struct {
+	Label string `json:"label"`
+	Count int    `json:"count"`
+	Size  string `json:"size"`
+}
+
+type scanResult struct {
+	Count   int          `json:"count"`
+	Total   string       `json:"total"`
+	Min     string       `json:"min"`
+	Max     string       `json:"max"`
+	Avg     string       `json:"avg"`
+	Buckets []bucketInfo `json:"buckets"`
 }
 
 // ---------------------------------------------------------------------------
@@ -79,6 +97,7 @@ func main() {
 	mux.HandleFunc("/", handleIndex)
 	mux.HandleFunc("/api/pick-folder", handlePickFolder)
 	mux.HandleFunc("/api/pick-files", handlePickFiles)
+	mux.HandleFunc("/api/scan", handleScan)
 	mux.HandleFunc("/api/compress", handleCompress)
 	mux.HandleFunc("/api/quit", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -104,10 +123,11 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlePickFolder(w http.ResponseWriter, r *http.Request) {
-	script := `Add-Type -AssemblyName System.Windows.Forms; ` +
-		`$d = New-Object System.Windows.Forms.FolderBrowserDialog; ` +
-		`$d.Description = 'Sélectionner le dossier source'; ` +
-		`if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $d.SelectedPath } else { '' }`
+	// BIF_USENEWUI (0x50) = BIF_NEWDIALOGSTYLE + BIF_EDITBOX → modern explorer dialog with address bar
+	// Root = 17 (CSIDL_DRIVES = "Ce PC") so drives are immediately visible
+	script := `$shell = New-Object -ComObject Shell.Application; ` +
+		`$f = $shell.BrowseForFolder(0, 'Sélectionner le dossier source', 0x50, 17); ` +
+		`if ($f) { $f.Self.Path } else { '' }`
 	out, err := exec.Command("powershell", "-WindowStyle", "Hidden", "-Command", script).Output()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -139,11 +159,95 @@ func handlePickFiles(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{"files": files}) //nolint
 }
 
+func handleScan(w http.ResponseWriter, r *http.Request) {
+	var req scanReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var paths []string
+	if len(req.Files) > 0 {
+		for _, f := range req.Files {
+			if supportedExts[strings.ToLower(filepath.Ext(f))] {
+				paths = append(paths, f)
+			}
+		}
+	} else if req.Folder != "" {
+		dstBase := filepath.Join(req.Folder, "compress")
+		found, err := findImages(req.Folder, dstBase)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		paths = found
+	}
+
+	if len(paths) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(scanResult{}) //nolint
+		return
+	}
+
+	var sizes []int64
+	for _, f := range paths {
+		if info, err := os.Stat(f); err == nil {
+			sizes = append(sizes, info.Size())
+		}
+	}
+	sort.Slice(sizes, func(i, j int) bool { return sizes[i] < sizes[j] })
+
+	var total int64
+	for _, s := range sizes {
+		total += s
+	}
+	avg := total / int64(len(sizes))
+
+	limits := []int64{100 * 1024, 500 * 1024, 1024 * 1024, 5 * 1024 * 1024, 10 * 1024 * 1024}
+	labels := []string{"< 100 KB", "100–500 KB", "500 KB–1 MB", "1–5 MB", "5–10 MB", "> 10 MB"}
+	counts := make([]int, len(labels))
+	totals := make([]int64, len(labels))
+	for _, s := range sizes {
+		idx := len(labels) - 1
+		for i, lim := range limits {
+			if s < lim {
+				idx = i
+				break
+			}
+		}
+		counts[idx]++
+		totals[idx] += s
+	}
+
+	var buckets []bucketInfo
+	for i, lbl := range labels {
+		if counts[i] > 0 {
+			buckets = append(buckets, bucketInfo{Label: lbl, Count: counts[i], Size: fmtSize(totals[i])})
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(scanResult{ //nolint
+		Count:   len(sizes),
+		Total:   fmtSize(total),
+		Min:     fmtSize(sizes[0]),
+		Max:     fmtSize(sizes[len(sizes)-1]),
+		Avg:     fmtSize(avg),
+		Buckets: buckets,
+	})
+}
+
 func handleCompress(w http.ResponseWriter, r *http.Request) {
 	var req compressReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	// Priority 0 = quality (floor q=85), 100 = compression (floor q=50)
+	qFloor := 85 - int(math.Round(float64(req.Priority)/100.0*35))
+	if qFloor < 50 {
+		qFloor = 50
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -187,7 +291,7 @@ func handleCompress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var ok, skip, errCount int
+	var ok, skip, partial, errCount int
 	var saved int64
 
 	for i, job := range jobs {
@@ -199,15 +303,14 @@ func handleCompress(w http.ResponseWriter, r *http.Request) {
 
 		send(progressEvent{Type: "start", Index: i, Total: total, File: job.rel})
 
-		altVal := ""
-		if req.AltText {
-			altVal = req.AltValue
-		}
-		status, orig, final, msg := compressFile(job.src, job.dst, req.Target, req.MaxW, req.MaxH, altVal, req.AltMode)
+		status, orig, final, msg := compressFile(job.src, job.dst, req.Target, req.MaxW, req.MaxH, qFloor)
 
 		switch status {
 		case "success":
 			ok++
+			saved += orig - final
+		case "partial":
+			partial++
 			saved += orig - final
 		case "skip":
 			skip++
@@ -216,11 +319,11 @@ func handleCompress(w http.ResponseWriter, r *http.Request) {
 		}
 
 		ratio := "—"
-		if status == "success" && orig > 0 {
+		if (status == "success" || status == "partial") && orig > 0 {
 			ratio = fmt.Sprintf("%d%%", int(float64(final)/float64(orig)*100))
 		}
 		compStr := "—"
-		if status == "success" {
+		if status == "success" || status == "partial" {
 			compStr = fmtSize(final)
 		}
 
@@ -237,11 +340,12 @@ func handleCompress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	send(progressEvent{
-		Type:  "done",
-		OK:    ok,
-		Skip:  skip,
-		Err:   errCount,
-		Saved: fmtSize(saved),
+		Type:    "done",
+		OK:      ok,
+		Skip:    skip,
+		Partial: partial,
+		Err:     errCount,
+		Saved:   fmtSize(saved),
 	})
 }
 
@@ -249,7 +353,7 @@ func handleCompress(w http.ResponseWriter, r *http.Request) {
 // Compression
 // ---------------------------------------------------------------------------
 
-func compressFile(src, dst string, target, maxW, maxH int, altValue, altMode string) (status string, orig, final int64, msg string) {
+func compressFile(src, dst string, target, maxW, maxH, qFloor int) (status string, orig, final int64, msg string) {
 	info, err := os.Stat(src)
 	if err != nil {
 		return "error", 0, 0, err.Error()
@@ -268,7 +372,6 @@ func compressFile(src, dst string, target, maxW, maxH int, altValue, altMode str
 		return "error", orig, 0, fmt.Sprintf("Décodage : %v", err)
 	}
 
-	// Determine output format
 	outExt := ext
 	var convertNote string
 	switch ext {
@@ -282,7 +385,6 @@ func compressFile(src, dst string, target, maxW, maxH int, altValue, altMode str
 	W := img.Bounds().Dx()
 	H := img.Bounds().Dy()
 
-	// Pixel-dimension cap
 	var pxLabel string
 	needsPx := (maxW > 0 && W > maxW) || (maxH > 0 && H > maxH)
 	if needsPx {
@@ -300,32 +402,8 @@ func compressFile(src, dst string, target, maxW, maxH int, altValue, altMode str
 		pxLabel = fmt.Sprintf("%d×%d", nw, nh)
 	}
 
-	// Skip if already within all constraints
 	if !needsPx && convertNote == "" && orig <= int64(target) {
-		if altValue == "" {
-			return "skip", orig, orig, "Déjà sous le seuil"
-		}
-		origData, readErr := os.ReadFile(src)
-		if readErr != nil {
-			return "error", orig, 0, readErr.Error()
-		}
-		alt := buildAltText(filepath.Base(src), altValue, altMode)
-		var withXMP []byte
-		switch outExt {
-		case ".jpg", ".jpeg":
-			withXMP = injectXMPJPEG(origData, alt)
-		case ".png":
-			withXMP = injectXMPPNG(origData, alt)
-		default:
-			return "skip", orig, orig, "Déjà sous le seuil"
-		}
-		if mkdirErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkdirErr != nil {
-			return "error", orig, 0, mkdirErr.Error()
-		}
-		if writeErr := os.WriteFile(dst, withXMP, 0o644); writeErr != nil {
-			return "error", orig, 0, writeErr.Error()
-		}
-		return "success", orig, orig, "Alt injecté (taille OK)"
+		return "skip", orig, orig, "Déjà sous le seuil"
 	}
 
 	outPath := dst
@@ -335,26 +413,16 @@ func compressFile(src, dst string, target, maxW, maxH int, altValue, altMode str
 
 	var data []byte
 	var compMsg string
+	var reachedTarget bool
 	switch outExt {
 	case ".jpg", ".jpeg":
-		data, compMsg = compressJPEG(img, target, W, H, pxLabel)
+		data, compMsg, reachedTarget = compressJPEG(img, target, W, H, pxLabel, qFloor)
 	case ".png":
-		data, compMsg = compressPNG(img, target, W, H, pxLabel)
+		data, compMsg, reachedTarget = compressPNG(img, target, W, H, pxLabel)
 	}
 
 	if data == nil {
 		return "error", orig, orig, compMsg
-	}
-
-	// Inject XMP accessibility alt text if requested
-	if altValue != "" {
-		alt := buildAltText(filepath.Base(src), altValue, altMode)
-		switch outExt {
-		case ".jpg", ".jpeg":
-			data = injectXMPJPEG(data, alt)
-		case ".png":
-			data = injectXMPPNG(data, alt)
-		}
 	}
 
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
@@ -367,10 +435,13 @@ func compressFile(src, dst string, target, maxW, maxH int, altValue, altMode str
 	if convertNote != "" {
 		compMsg = convertNote + " — " + compMsg
 	}
+	if !reachedTarget {
+		return "partial", orig, int64(len(data)), compMsg
+	}
 	return "success", orig, int64(len(data)), compMsg
 }
 
-func compressJPEG(img image.Image, target, W, H int, pxLabel string) ([]byte, string) {
+func compressJPEG(img image.Image, target, W, H int, pxLabel string, qFloor int) ([]byte, string, bool) {
 	enc := func(im image.Image, q int) ([]byte, bool) {
 		var buf bytes.Buffer
 		if err := jpeg.Encode(&buf, im, &jpeg.Options{Quality: q}); err != nil {
@@ -379,8 +450,8 @@ func compressJPEG(img image.Image, target, W, H int, pxLabel string) ([]byte, st
 		return buf.Bytes(), true
 	}
 
-	// Step 1: binary-search quality at full resolution (floor = 75 to preserve quality)
-	lo, hi := 75, 95
+	// Step 1: binary-search quality at full resolution
+	lo, hi := qFloor, 95
 	var best []byte
 	for lo <= hi {
 		mid := (lo + hi) / 2
@@ -391,28 +462,26 @@ func compressJPEG(img image.Image, target, W, H int, pxLabel string) ([]byte, st
 		}
 	}
 	if best != nil {
-		return best, label(pxLabel, "qualité réduite")
+		return best, label(pxLabel, "qualité réduite"), true
 	}
 
-	// Step 2: find the LARGEST scale where quality=75 still fits, then maximise quality.
-	// Probing at the quality floor ensures minimum acceptable quality at each scale.
+	// Step 2: find the LARGEST scale where qFloor fits, then maximise quality
 	loS, hiS := 5, 95
 	bestScale := 0
 	for loS <= hiS {
 		midS := (loS + hiS) / 2
 		nw, nh := max(W*midS/100, 8), max(H*midS/100, 8)
-		if d, ok := enc(resizeImg(img, nw, nh), 75); ok && len(d) <= target {
+		if d, ok := enc(resizeImg(img, nw, nh), qFloor); ok && len(d) <= target {
 			bestScale = midS
-			loS = midS + 1 // still fits — try a larger (less aggressive) scale
+			loS = midS + 1
 		} else {
-			hiS = midS - 1 // doesn't fit even at q=75 — must go smaller
+			hiS = midS - 1
 		}
 	}
 	if bestScale > 0 {
 		nw, nh := max(W*bestScale/100, 8), max(H*bestScale/100, 8)
 		r := resizeImg(img, nw, nh)
-		// Maximise quality at this scale to get as close to target as possible
-		lo, hi = 75, 95
+		lo, hi = qFloor, 95
 		var bestD []byte
 		for lo <= hi {
 			mid := (lo + hi) / 2
@@ -423,15 +492,21 @@ func compressJPEG(img image.Image, target, W, H int, pxLabel string) ([]byte, st
 			}
 		}
 		if bestD == nil {
-			bestD, _ = enc(r, 75)
+			bestD, _ = enc(r, qFloor)
 		}
-		return bestD, label(pxLabel, fmt.Sprintf("redimensionné %d×%d", nw, nh))
+		return bestD, label(pxLabel, fmt.Sprintf("redimensionné %d×%d", nw, nh)), true
 	}
 
-	return nil, fmt.Sprintf("Impossible d'atteindre %s", fmtSize(int64(target)))
+	// Best-effort: target unreachable — compress at minimum scale to get as close as possible
+	nw, nh := max(W*5/100, 8), max(H*5/100, 8)
+	r := resizeImg(img, nw, nh)
+	if d, ok := enc(r, qFloor); ok {
+		return d, label(pxLabel, fmt.Sprintf("meilleur effort %d×%d", nw, nh)), false
+	}
+	return nil, "Échec de compression", false
 }
 
-func compressPNG(img image.Image, target, W, H int, pxLabel string) ([]byte, string) {
+func compressPNG(img image.Image, target, W, H int, pxLabel string) ([]byte, string, bool) {
 	enc := func(im image.Image) ([]byte, bool) {
 		var buf bytes.Buffer
 		e := &png.Encoder{CompressionLevel: png.BestCompression}
@@ -442,10 +517,9 @@ func compressPNG(img image.Image, target, W, H int, pxLabel string) ([]byte, str
 	}
 
 	if d, ok := enc(img); ok && len(d) <= target {
-		return d, label(pxLabel, "optimisé")
+		return d, label(pxLabel, "optimisé"), true
 	}
 
-	// Find the LARGEST scale where BestCompression still fits under target.
 	loS, hiS := 5, 95
 	bestScale := 0
 	var bestD []byte
@@ -454,17 +528,22 @@ func compressPNG(img image.Image, target, W, H int, pxLabel string) ([]byte, str
 		nw, nh := max(W*midS/100, 8), max(H*midS/100, 8)
 		if d, ok := enc(resizeImg(img, nw, nh)); ok && len(d) <= target {
 			bestScale, bestD = midS, d
-			loS = midS + 1 // still fits — try larger scale
+			loS = midS + 1
 		} else {
-			hiS = midS - 1 // doesn't fit — try smaller scale
+			hiS = midS - 1
 		}
 	}
 	if bestScale > 0 {
 		nw, nh := max(W*bestScale/100, 8), max(H*bestScale/100, 8)
-		return bestD, label(pxLabel, fmt.Sprintf("redimensionné %d×%d", nw, nh))
+		return bestD, label(pxLabel, fmt.Sprintf("redimensionné %d×%d", nw, nh)), true
 	}
 
-	return nil, fmt.Sprintf("Impossible d'atteindre %s", fmtSize(int64(target)))
+	// Best-effort: compress at minimum scale
+	nw, nh := max(W*5/100, 8), max(H*5/100, 8)
+	if d, ok := enc(resizeImg(img, nw, nh)); ok {
+		return d, label(pxLabel, fmt.Sprintf("meilleur effort %d×%d", nw, nh)), false
+	}
+	return nil, "Échec de compression", false
 }
 
 func label(px, action string) string {
@@ -523,104 +602,4 @@ func fmtSize(b int64) string {
 	default:
 		return fmt.Sprintf("%.2f MB", float64(b)/1_048_576)
 	}
-}
-
-// ---------------------------------------------------------------------------
-// Alt text helpers
-// ---------------------------------------------------------------------------
-
-// buildAltText constructs the Iptc4xmpCore:AltTextAccessibility value.
-// The filename has its extension stripped, then hyphens and underscores
-// replaced with spaces; original casing is preserved.
-func buildAltText(filename, value, mode string) string {
-	base := strings.TrimSuffix(filename, filepath.Ext(filename))
-	cleaned := strings.NewReplacer("-", " ", "_", " ").Replace(base)
-	if mode == "suffix" {
-		return cleaned + " " + value
-	}
-	return value + " " + cleaned
-}
-
-// ---------------------------------------------------------------------------
-// XMP injection
-// ---------------------------------------------------------------------------
-
-func xmpPacket(altText string) string {
-	return "<?xpacket begin='\xef\xbb\xbf' id='W5M0MpCehiHzreSzNTczkc9d'?>" +
-		"<x:xmpmeta xmlns:x='adobe:ns:meta/'>" +
-		"<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>" +
-		"<rdf:Description rdf:about='' xmlns:Iptc4xmpCore='http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/'>" +
-		"<Iptc4xmpCore:AltTextAccessibility>" + xmlEscape(altText) + "</Iptc4xmpCore:AltTextAccessibility>" +
-		"</rdf:Description></rdf:RDF></x:xmpmeta>" +
-		"<?xpacket end='w'?>"
-}
-
-func xmlEscape(s string) string {
-	s = strings.ReplaceAll(s, "&", "&amp;")
-	s = strings.ReplaceAll(s, "<", "&lt;")
-	s = strings.ReplaceAll(s, ">", "&gt;")
-	return s
-}
-
-// injectXMPJPEG embeds an XMP APP1 segment right after the JPEG SOI marker.
-// When we re-encode an image via image/jpeg all prior metadata is already
-// stripped, so no removal of existing segments is necessary.
-func injectXMPJPEG(data []byte, altText string) []byte {
-	if len(data) < 2 {
-		return data
-	}
-	ns := "http://ns.adobe.com/xap/1.0/\x00"
-	payload := []byte(ns + xmpPacket(altText))
-	segLen := len(payload) + 2 // length field includes its own 2 bytes
-	if segLen > 0xFFFF {
-		return data // XMP too large to embed in a single APP1 segment
-	}
-	seg := make([]byte, 4+len(payload))
-	seg[0], seg[1] = 0xFF, 0xE1
-	seg[2], seg[3] = byte(segLen>>8), byte(segLen)
-	copy(seg[4:], payload)
-
-	out := make([]byte, 0, len(data)+len(seg))
-	out = append(out, data[:2]...) // SOI
-	out = append(out, seg...)
-	out = append(out, data[2:]...)
-	return out
-}
-
-// injectXMPPNG adds an iTXt chunk carrying XMP metadata after the IHDR chunk.
-func injectXMPPNG(data []byte, altText string) []byte {
-	const sig = "\x89PNG\r\n\x1a\n"
-	if len(data) < 8 || string(data[:8]) != sig {
-		return data
-	}
-	// IHDR chunk: 4-byte length + 4-byte type + data + 4-byte CRC
-	if len(data) < 8+12 {
-		return data
-	}
-	ihdrLen := int(data[8])<<24 | int(data[9])<<16 | int(data[10])<<8 | int(data[11])
-	insertAt := 8 + 4 + 4 + ihdrLen + 4
-	if insertAt > len(data) {
-		return data
-	}
-
-	// iTXt data: keyword\0 compFlag compMethod langTag\0 transKW\0 text
-	keyword := "XML:com.adobe.xmp"
-	chunkData := []byte(keyword + "\x00\x00\x00\x00\x00" + xmpPacket(altText))
-	chunkType := []byte("iTXt")
-
-	length := len(chunkData)
-	chunk := make([]byte, 4+4+length+4)
-	chunk[0], chunk[1], chunk[2], chunk[3] = byte(length>>24), byte(length>>16), byte(length>>8), byte(length)
-	copy(chunk[4:8], chunkType)
-	copy(chunk[8:], chunkData)
-	// CRC covers type + data
-	c := crc32.ChecksumIEEE(chunk[4 : 8+length])
-	chunk[8+length], chunk[9+length], chunk[10+length], chunk[11+length] =
-		byte(c>>24), byte(c>>16), byte(c>>8), byte(c)
-
-	out := make([]byte, 0, len(data)+len(chunk))
-	out = append(out, data[:insertAt]...)
-	out = append(out, chunk...)
-	out = append(out, data[insertAt:]...)
-	return out
 }
