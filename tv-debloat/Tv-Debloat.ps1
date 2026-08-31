@@ -191,13 +191,42 @@ function Expand-PackageList {
 # Google TV shows no launcher chooser, so the component name has to come from
 # the device rather than being assumed.
 function Get-HomeActivities {
-    foreach ($c in @('cmd package query-activities --brief -c android.intent.category.HOME',
-                     'pm query-activities --brief -c android.intent.category.HOME')) {
+    # An intent with a category but no action matches nothing, so the action
+    # has to be included or the query comes back empty on every build.
+    foreach ($c in @('cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME',
+                     'pm query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME',
+                     'cmd package query-activities -a android.intent.action.MAIN -c android.intent.category.HOME')) {
         $hits = @(Invoke-AdbShell $c -AllowFailure |
-                  Where-Object { $_ -match '^[A-Za-z0-9_.]+/' })
-        if ($hits) { return @($hits | ForEach-Object { $_.Trim() } | Sort-Object -Unique) }
+                  ForEach-Object { if ($_ -match '([A-Za-z0-9_.]+/[A-Za-z0-9_.$]+)') { $Matches[1] } } |
+                  Where-Object { $_ })
+        if ($hits) { return @($hits | Sort-Object -Unique) }
     }
     return @()
+}
+
+# The HOME activity of one specific package. Tried three ways, because builds
+# differ in which of these the shell actually implements.
+function Get-HomeActivityFor {
+    param([string]$Pkg)
+    $esc = [regex]::Escape($Pkg)
+
+    # 1. Resolver, scoped to this package with -p.
+    $r = Invoke-AdbShell "cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME -p $Pkg" -AllowFailure |
+         ForEach-Object { if ($_ -match "($esc/[A-Za-z0-9_.`$]+)") { $Matches[1] } } |
+         Where-Object { $_ } | Select-Object -First 1
+    if ($r) { return $r }
+
+    # 2. The full HOME list, filtered.
+    $q = Get-HomeActivities | Where-Object { $_ -like "$Pkg/*" } | Select-Object -First 1
+    if ($q) { return $q }
+
+    # 3. Read the package dump and pair an activity name with the HOME category.
+    $current = ''
+    foreach ($line in (Invoke-AdbShell "dumpsys package $Pkg" -AllowFailure)) {
+        if ($line -match "($esc/[A-Za-z0-9_.`$]+)") { $current = $Matches[1] }
+        if ($line -match 'android\.intent\.category\.HOME' -and $current) { return $current }
+    }
+    return ''
 }
 
 function Get-HomePackage {
@@ -724,8 +753,18 @@ function Cmd-ListHome {
     Step "Apps on this TV that can be the home screen"
     $acts = Get-HomeActivities
     if (-not $acts) {
-        Warn "adb returned no HOME activities. This build may not support"
-        Warn "query-activities; we can still fall back to replace-launcher."
+        Warn "The bulk query returned nothing on this build. Probing the"
+        Warn "likely launchers one at a time instead."
+        $probe = @(Get-InstalledPackages | Where-Object {
+            $_ -match 'launcher|flauncher|home|leanback|tvlauncher'
+        })
+        foreach ($p in $probe) {
+            $c = Get-HomeActivityFor $p
+            if ($c) { $acts += $c }
+        }
+    }
+    if (-not $acts) {
+        Warn "Still nothing. replace-launcher remains available as the fallback."
         return
     }
     foreach ($a in $acts) { Say $a }
@@ -739,14 +778,17 @@ function Cmd-SetHome {
     if (-not $Packages) { Fail "Which package? e.g. -Packages me.efesser.flauncher"; exit 1 }
     $target = @(Expand-PackageList $Packages)[0]
 
-    $acts = @(Get-HomeActivities | Where-Object { $_ -like "$target/*" })
-    if (-not $acts) {
-        Fail "$target registers no HOME activity on this TV."
-        Say "Check it is installed and has been opened once, then run:"
-        Say "  .\Tv-Debloat.ps1 list-home"
+    if (@(Get-InstalledPackages) -notcontains $target) {
+        Fail "$target is not installed on this TV."
         exit 1
     }
-    $component = $acts[0]
+    $component = Get-HomeActivityFor $target
+    if (-not $component) {
+        Fail "$target registers no HOME activity that adb can find."
+        Say "Open the app once on the TV, then try again. If it still fails,"
+        Say "replace-launcher is the fallback route."
+        exit 1
+    }
 
     Step "Setting $component as the home screen"
     $out = (Invoke-AdbShell "cmd package set-home-activity $component" -AllowFailure) -join ' '
