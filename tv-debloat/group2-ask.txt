@@ -1,0 +1,42 @@
+# GROUP 2 - I NEED YOUR ANSWER BEFORE TOUCHING THESE
+# Format:  glob-pattern | the question I am actually asking you
+# Every one of these is genuinely useful to somebody. Whether it is useful
+# to YOU is not something I can work out from here, so triage lists them
+# and waits. Rule 5: if unsure, ask.
+
+# ---- Streaming apps: which of these do you actually open? ---------------
+com.amazon.amazonvideo.livingroom | Prime Video - do you use it?
+com.amazon.*                      | Amazon app - do you use it?
+com.disney.disneyplus             | Disney+ - do you use it?
+com.wbd.stream                    | HBO Max / Max - do you use it?
+com.apple.atve.androidtv.appletv  | Apple TV - do you use it?
+com.spotify.tv.android            | Spotify - do you use it?
+com.plexapp.*                     | Plex - do you use it?
+com.molotov.*                     | Molotov - do you use it?
+tv.molotov.*                      | Molotov - do you use it?
+com.mycanal*                      | myCANAL - do you use it?
+fr.francetv*                      | France TV - do you use it?
+com.deezer.*                      | Deezer - do you use it?
+com.twitch.*                      | Twitch - do you use it?
+com.google.android.videos         | Google TV / Play Movies store - do you ever buy or rent films here?
+com.google.android.play.games     | Play Games - do you play anything on the TV?
+
+# ---- Casting and second-screen -------------------------------------------
+com.google.android.apps.mediashell | Chromecast built-in receiver. Disabling stops you casting from a phone. Do you cast?
+com.google.android.gms.cast*       | Cast support. Same question.
+
+# ---- Browser -------------------------------------------------------------
+com.android.chrome                 | Chrome. Do you ever browse on the TV?
+*.browser                          | A web browser. Do you use it?
+
+# ---- Screen calibration and accessibility --------------------------------
+com.google.android.tungsten.overscan | Overscan/screen-edge calibration wizard. Rarely opened, but the only way to fix a cropped picture.
+com.google.android.marvin.talkback   | TalkBack screen reader. Disable only if nobody using the TV needs it.
+com.android.talkback                 | TalkBack screen reader. Same question.
+
+# ---- Vendor extras whose purpose I cannot confirm from here -------------
+com.tcl.*account*   | TCL account service. Do you have a TCL account signed in?
+com.tcl.*upgrade*   | TCL firmware updater. Disabling stops future TV software updates. Your call.
+com.tcl.*ota*       | TCL over-the-air updater. Same trade-off as above.
+com.tcl.*store*     | TCL's own app store. Do you install anything through it?
+com.tcl.*weather*   | TCL weather widget. Used on the home screen you are about to replace.

@@ -1,0 +1,4 @@
+# adb, downloaded by 'setup'
+platform-tools/
+# which TV we last connected to
+.device

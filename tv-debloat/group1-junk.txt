@@ -1,0 +1,49 @@
+# GROUP 1 - CANDIDATES I CONSIDER SAFE TO DISABLE
+# Format:  glob-pattern | one-line explanation of what it is
+# These are PATTERNS, not a claim that these packages exist on your TV.
+# 'triage' intersects them with what is actually installed, so nothing
+# invented ever reaches a disable command. Keep-list always wins.
+
+# ---- Ads and the "recommended for you" rows ----------------------------
+com.google.android.tvrecommendations | Builds the recommendation rows on the Google TV home screen
+com.google.android.leanbacklauncher.recommendations | Older recommendation-row provider
+*.recommendation*                    | Recommendation row provider
+com.tcl.ad*                          | TCL advertising delivery
+com.tcl.*advert*                     | TCL advertising delivery
+*.adservice*                         | Ad service component
+
+# ---- Screensavers / ambient ---------------------------------------------
+com.google.android.backdrop          | Backdrop ambient screensaver, pulls images over the network when idle
+com.google.android.apps.tv.dreamx    | Google TV ambient/screensaver mode
+
+# ---- Voice assistant -----------------------------------------------------
+com.google.android.katniss           | Google Assistant and voice search for TV
+com.google.android.tv.voiceinput     | Voice input service for the assistant
+com.google.android.assistant*        | Google Assistant component
+
+# ---- Setup wizards (already run; only needed again after a factory reset)
+com.google.android.tungsten.setupwraith | First-run setup wizard
+*setupwizard*                        | First-run setup wizard
+*.oobe*                              | Out-of-box first-run experience
+com.google.android.partnersetup      | Partner/OEM search-and-default setup, runs once
+
+# ---- Retail / demo mode --------------------------------------------------
+*retaildemo*                         | Shop-floor demo mode
+*.demo                               | Shop-floor demo mode
+com.tcl.*demo*                       | TCL shop-floor demo mode
+
+# ---- Telemetry, logging, crash and usage reporting ----------------------
+*analytics*                          | Usage analytics upload
+*telemetry*                          | Telemetry upload
+*datacollect*                        | Data collection agent
+*uploadlog*                          | Log upload agent
+*logcollect*                         | Log collection agent
+*crashreport*                        | Crash reporting agent
+com.tcl.*feedback*                   | TCL feedback/diagnostics reporting
+com.tcl.*userexperience*             | TCL user-experience data programme
+
+# ---- Phone-only leftovers with nothing to do on a TV --------------------
+com.android.printspooler             | Print spooler. A TV cannot print.
+com.google.android.syncadapters.contacts | Syncs a contacts list the TV has no use for
+com.google.android.syncadapters.calendar | Syncs a calendar the TV has no use for
+com.android.bookmarkprovider         | Browser bookmark store for a browser the TV does not ship
