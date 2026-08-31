@@ -54,6 +54,28 @@ The home screen was later switched again from FLauncher to Projectivy
 Launcher (`com.spocky.projengmenu`). Both are protected in `keep-list.txt`;
 the Google TV launcher remains disabled throughout.
 
+### If you install another launcher
+
+Installing a new HOME app clears Android's preferred-home setting. With the
+Google TV launcher disabled, HOME then falls back to
+`com.android.tv.settings/.system.FallbackHome` - a bare screen that works but
+is not a launcher. This happened when Projectivy was installed.
+
+It is not a fault and needs no recovery, just a new default:
+
+```
+.\Tv-Debloat.ps1 list-home                              # confirm the package name
+.\Tv-Debloat.ps1 set-home -Packages <new launcher>
+.\Tv-Debloat.ps1 reboot
+```
+
+Check `list-home` after installing any launcher - "Currently active" tells you
+whether a preference is set or the TV has quietly dropped to FallbackHome.
+
+This is also why `com.android.tv.settings` is on the keep-list. With the stock
+launcher disabled, FallbackHome is the last thing between a cleared preference
+and a black screen, and it lives inside the Settings package.
+
 Kept deliberately: the Inputs/Source quick panel, HDMI and tuner services, the
 remote control stack, Play Services and Store, fused location, every IME,
 Android TV Settings (which also provides FallbackHome), Netflix, YouTube, all
