@@ -13,6 +13,12 @@ ADB over Ethernet, 192.168.1.29:5555. Completed 31 August 2026.
 | Enabled packages | 144 | 107 | -37 |
 | Disabled packages | 2 | 40 | +38 |
 
+**These figures are from the earlier configuration**, measured when 38
+packages were disabled including `com.google.android.apps.tv.launcherx`. The
+final configuration leaves `launcherx` enabled for the hotkeys, so 37 are
+disabled and current memory use will be somewhat higher than 958 MB. It has
+not been re-measured.
+
 Package counts reconcile: 146 packages before (144 + 2), 147 after (107 + 40).
 The extra one is FLauncher, installed during the work.
 
@@ -38,7 +44,7 @@ up cleanly in a memory total.
 
 ## 2. What was disabled
 
-38 packages, in five tested batches. Full record with timestamps in
+37 packages (38 were disabled, then `launcherx` was re-enabled - see the hotkey finding). Full record with timestamps in
 `kapatilanlar.txt`. Nothing was uninstalled; every change reverses with
 `pm enable`.
 
@@ -83,13 +89,38 @@ streaming apps in use, the Chromecast receiver, and TCL's firmware updater.
 
 Three opaquely-named packages were initially left alone: `com.tcl.guard`,
 `com.tcl.t_solo`, `com.tcl.dashboard`. They were later disabled at the owner's
-request, which broke the Netflix hotkey on the remote. Bisecting identified
-**`com.tcl.dashboard`** as the cause - despite the name, it is part of the
-branded-hotkey path (Netflix/YouTube/Prime buttons), and the `com.tcl.*key*`
-keep-list rule does not cover it because `keyhelp` is a separate package.
+request. All three remain **unknown**: none was ever shown individually to
+break anything, and the hotkey failure that appeared around the same time had
+a different cause (below).
 
-`com.tcl.dashboard` is now keep-listed. This is undocumented behaviour and is
-the main thing worth carrying forward from this exercise.
+## The hotkey finding
+
+The remote's branded buttons - **Netflix, Prime Video, YouTube and Media** -
+are routed through `com.google.android.apps.tv.launcherx`. Disabling the
+Google TV launcher stops all four resolving, regardless of what else is
+disabled or which launcher owns HOME.
+
+This was established by elimination: re-enabling everything restored the
+buttons, and re-applying all 37 other packages with `launcherx` left enabled
+kept them working.
+
+**Consequence:** `launcherx` is left ENABLED but is not the home screen.
+Projectivy owns HOME, so the Google TV home screen and its ad rows are never
+displayed, while the launcher stays present to service the hotkeys. This is
+the deliberate final configuration, not an oversight.
+
+It also means the earlier claim that `com.tcl.dashboard` caused the Netflix
+button to fail was wrong; the keep-list has been corrected.
+
+### How this went unnoticed for so long
+
+The six-point test used after each batch - Inputs/Source, HDMI, Netflix opens,
+YouTube opens, sound, keyboard - did not include the remote's branded buttons.
+"Netflix opens" was satisfied by launching it from the home screen. The
+buttons broke at batch 5, the launcher swap, and four subsequent batches were
+reported as passing before anyone pressed one.
+
+Any future run of this kind should test the hardware buttons explicitly.
 
 ## 3. Undoing it
 

@@ -146,10 +146,17 @@ com.tcl.versionUpdateApp           # TCL firmware updater - you chose to keep up
 com.tcl.*ota*                      # any TCL over-the-air update component
 com.tcl.*upgrade*                  # any TCL upgrade component
 
-# ---- Found by bisect, 31/08/2026 ---------------------------------------
-# Disabling com.tcl.dashboard stopped the Netflix hotkey on the remote from
-# working. The name suggests a UI panel; it is actually (or also) part of the
-# branded-hotkey path - the Netflix/YouTube/Prime buttons. Established by
-# disabling it alone and watching the button die, then reversing it.
-# The com.tcl.*key* rule does not cover this: keyhelp is a different package.
-com.tcl.dashboard                # branded hotkeys on the remote (Netflix etc.)
+# ---- CORRECTED, 31/08/2026 ---------------------------------------------
+# com.tcl.dashboard was briefly recorded here as the confirmed cause of the
+# remote's Netflix hotkey failing. That was WRONG. Re-enabling it did not fix
+# the buttons. Re-enabling everything did, and re-applying all 37 packages
+# with the Google TV launcher left ENABLED kept them working.
+#
+# The actual cause: the branded hotkeys (Netflix / Prime / YouTube / Media)
+# are routed through com.google.android.apps.tv.launcherx. Disable that and
+# the buttons stop resolving, whatever else is disabled.
+#
+# com.tcl.dashboard, com.tcl.guard and com.tcl.t_solo remain UNKNOWN. None was
+# ever individually shown to break anything. dashboard stays listed below as a
+# precaution only - not because it was proven guilty.
+com.tcl.dashboard                # unknown; kept as a precaution, not a proven cause
