@@ -1,0 +1,84 @@
+# Results
+
+TCL Smart TV Pro, firmware V8-R51MT05-LF1V652.021344, Android 11 (API 30).
+ADB over Ethernet, 192.168.1.29:5555. Completed 31 August 2026.
+
+## 1. Before / after
+
+| Measurement | before | after (settled) | change |
+|---|---|---|---|
+| Total RAM | 2048 MB | 2048 MB | — |
+| **Used RAM** | **1101 MB** | **958 MB** | **-143 MB (-13%)** |
+| Free RAM | 520 MB | 404 MB | -116 MB (see below) |
+| Enabled packages | 144 | 107 | -37 |
+| Disabled packages | 2 | 40 | +38 |
+
+Package counts reconcile: 146 packages before (144 + 2), 147 after (107 + 40).
+The extra one is FLauncher, installed during the work.
+
+### How to read these numbers
+
+**Used RAM is the figure that means something**, and it fell by 143 MB.
+
+**Free RAM went down, which is not a regression.** In `dumpsys meminfo`, "Free
+RAM" counts cached processes and cached kernel pages, not just unallocated
+memory. Fewer background services means fewer cached processes, so the number
+shrinks while the machine is in better shape. Android also deliberately fills
+unused RAM with cache; a large "Free RAM" is not a goal.
+
+**The comparison is not perfectly clean.** The "before" snapshot was taken on a
+TV that had been running for some time; the "after" came after a reboot, and a
+reboot alone frees memory. Some part of the 143 MB is the reboot, not the
+debloat. The honest claim is "an improvement of up to 143 MB", not exactly that
+much.
+
+The real win is not in this table. It is the ad and recommendation rows, the
+Alexa and assistant services, and TCL's telemetry uploads, none of which show
+up cleanly in a memory total.
+
+## 2. What was disabled
+
+38 packages, in five tested batches. Full record with timestamps in
+`kapatilanlar.txt`. Nothing was uninstalled; every change reverses with
+`pm enable`.
+
+| Batch | Theme | Count |
+|---|---|---|
+| 1 | Ads and telemetry | 10 |
+| 2 | Voice assistants, screensavers, unused accessibility | 10 |
+| 3 | Setup wizards and TCL promo leftovers | 10 |
+| 4 | Owner's explicit choices | 7 |
+| 5 | Google TV launcher, after FLauncher was confirmed working | 1 |
+
+Kept deliberately: the Inputs/Source quick panel, HDMI and tuner services, the
+remote control stack, Play Services and Store, fused location, every IME,
+Android TV Settings (which also provides FallbackHome), Netflix, YouTube, all
+streaming apps in use, the Chromecast receiver, and TCL's firmware updater.
+
+Left alone for lack of evidence: `com.tcl.guard`, `com.tcl.t_solo`,
+`com.tcl.dashboard`. Opaque names, no reliable way to tell what they do, and
+not worth guessing for the memory they would free.
+
+## 3. Undoing it
+
+```
+.\Tv-Debloat.ps1 undo-all
+```
+
+Or the single command in `UNDO-EVERYTHING.txt`, produced by
+`.\Tv-Debloat.ps1 undo-command`.
+
+Neither restores the Google TV launcher as the *home screen* - re-enabling the
+package is not the same as making it default. To go fully back to stock:
+
+```
+adb shell cmd package set-home-activity com.google.android.apps.tv.launcherx/.home.HomeActivity
+```
+
+Then reboot.
+
+## Note for the future
+
+Firmware updates were deliberately left enabled, for security patches. A major
+TCL update can re-enable packages or reintroduce ad features. If the ad rows
+come back, re-run `triage` and compare against `kapatilanlar.txt`.
