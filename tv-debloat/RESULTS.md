@@ -81,9 +81,15 @@ remote control stack, Play Services and Store, fused location, every IME,
 Android TV Settings (which also provides FallbackHome), Netflix, YouTube, all
 streaming apps in use, the Chromecast receiver, and TCL's firmware updater.
 
-Left alone for lack of evidence: `com.tcl.guard`, `com.tcl.t_solo`,
-`com.tcl.dashboard`. Opaque names, no reliable way to tell what they do, and
-not worth guessing for the memory they would free.
+Three opaquely-named packages were initially left alone: `com.tcl.guard`,
+`com.tcl.t_solo`, `com.tcl.dashboard`. They were later disabled at the owner's
+request, which broke the Netflix hotkey on the remote. Bisecting identified
+**`com.tcl.dashboard`** as the cause - despite the name, it is part of the
+branded-hotkey path (Netflix/YouTube/Prime buttons), and the `com.tcl.*key*`
+keep-list rule does not cover it because `keyhelp` is a separate package.
+
+`com.tcl.dashboard` is now keep-listed. This is undocumented behaviour and is
+the main thing worth carrying forward from this exercise.
 
 ## 3. Undoing it
 

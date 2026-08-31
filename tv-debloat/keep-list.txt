@@ -145,3 +145,11 @@ com.tcl.magiconnectfree            # TCL device-connect / mirroring
 com.tcl.versionUpdateApp           # TCL firmware updater - you chose to keep updates
 com.tcl.*ota*                      # any TCL over-the-air update component
 com.tcl.*upgrade*                  # any TCL upgrade component
+
+# ---- Found by bisect, 31/08/2026 ---------------------------------------
+# Disabling com.tcl.dashboard stopped the Netflix hotkey on the remote from
+# working. The name suggests a UI panel; it is actually (or also) part of the
+# branded-hotkey path - the Netflix/YouTube/Prime buttons. Established by
+# disabling it alone and watching the button die, then reversing it.
+# The com.tcl.*key* rule does not cover this: keyhelp is a different package.
+com.tcl.dashboard                # branded hotkeys on the remote (Netflix etc.)
