@@ -26,7 +26,8 @@ param(
     [Parameter(Position = 0)]
     [ValidateSet('help', 'setup', 'doctor', 'connect', 'measure', 'triage', 'disable',
                  'enable', 'undo-last', 'undo-all', 'undo-command', 'tune', 'trim',
-                 'reboot', 'report', 'replace-launcher', 'status')]
+                 'reboot', 'report', 'replace-launcher', 'status', 'list-home',
+                 'set-home')]
     [string]$Command = 'help',
 
     [string]$Ip,
@@ -186,6 +187,19 @@ function Expand-PackageList {
 # Which package currently owns HOME. Android TV builds differ in what
 # resolve-activity prints, so try the brief form, the verbose form, and the
 # launcher-role query before giving up. Returns '' if none of them answer.
+# Every activity on the TV that can act as a home screen, as "pkg/activity".
+# Google TV shows no launcher chooser, so the component name has to come from
+# the device rather than being assumed.
+function Get-HomeActivities {
+    foreach ($c in @('cmd package query-activities --brief -c android.intent.category.HOME',
+                     'pm query-activities --brief -c android.intent.category.HOME')) {
+        $hits = @(Invoke-AdbShell $c -AllowFailure |
+                  Where-Object { $_ -match '^[A-Za-z0-9_.]+/' })
+        if ($hits) { return @($hits | ForEach-Object { $_.Trim() } | Sort-Object -Unique) }
+    }
+    return @()
+}
+
 function Get-HomePackage {
     $brief = Invoke-AdbShell 'cmd package resolve-activity --brief -c android.intent.category.HOME' -AllowFailure |
              Where-Object { $_ -match '^[A-Za-z0-9_.]+/' } | Select-Object -First 1
@@ -704,6 +718,52 @@ function Cmd-ReplaceLauncher {
     }
 }
 
+
+function Cmd-ListHome {
+    Assert-Connected
+    Step "Apps on this TV that can be the home screen"
+    $acts = Get-HomeActivities
+    if (-not $acts) {
+        Warn "adb returned no HOME activities. This build may not support"
+        Warn "query-activities; we can still fall back to replace-launcher."
+        return
+    }
+    foreach ($a in $acts) { Say $a }
+    Write-Host ""
+    $now = Get-HomePackage
+    if ($now) { Say "Currently active: $now" } else { Warn "Could not tell which is active." }
+}
+
+function Cmd-SetHome {
+    Assert-Connected
+    if (-not $Packages) { Fail "Which package? e.g. -Packages me.efesser.flauncher"; exit 1 }
+    $target = @(Expand-PackageList $Packages)[0]
+
+    $acts = @(Get-HomeActivities | Where-Object { $_ -like "$target/*" })
+    if (-not $acts) {
+        Fail "$target registers no HOME activity on this TV."
+        Say "Check it is installed and has been opened once, then run:"
+        Say "  .\Tv-Debloat.ps1 list-home"
+        exit 1
+    }
+    $component = $acts[0]
+
+    Step "Setting $component as the home screen"
+    $out = (Invoke-AdbShell "cmd package set-home-activity $component" -AllowFailure) -join ' '
+    if ($out.Trim()) { Say $out.Trim() }
+
+    $now = Get-HomePackage
+    if ($now -eq $target) {
+        Good "HOME now resolves to $now"
+        Say "Press Home on the remote to confirm, then run replace-launcher."
+    } else {
+        Warn "HOME still resolves to '$now'."
+        Say "Some builds refuse set-home-activity while the stock launcher is enabled."
+        Say "In that case replace-launcher is the route: disabling the Google"
+        Say "launcher leaves FLauncher as the only home app, so it wins by default."
+    }
+}
+
 function Cmd-Report {
     Step "Before / after"
     $snaps = @(Get-ChildItem $SnapDir -Directory -ErrorAction SilentlyContinue | Sort-Object CreationTime)
@@ -758,6 +818,8 @@ Tv-Debloat.ps1 - reversible Android TV cleanup over ADB
   trim                           pm trim-caches
   reboot                         reboot the TV
   status                         what is disabled, which launcher, animation scales
+  list-home                      list every app that can act as the home screen
+  set-home -Packages <pkg>       make that app the home screen (Google TV has no chooser)
   replace-launcher               disable Google TV home once FLauncher is default
   report                         before/after table -> REPORT.md
 
@@ -784,6 +846,8 @@ switch ($Command) {
     'trim'             { Cmd-Trim }
     'reboot'           { Cmd-Reboot }
     'status'           { Cmd-Status }
+    'list-home'        { Cmd-ListHome }
+    'set-home'         { Cmd-SetHome }
     'replace-launcher' { Cmd-ReplaceLauncher }
     'report'           { Cmd-Report }
     default            { Cmd-Help }
