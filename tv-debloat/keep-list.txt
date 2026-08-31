@@ -1,0 +1,105 @@
+# NEVER-DISABLE LIST  (rule 5)
+# One glob pattern per line. Matching is case-insensitive, '*' is a wildcard.
+# Tv-Debloat.ps1 REFUSES to disable anything matching a line here. There is no
+# override flag except the dedicated 'replace-launcher' command for launcherx.
+# Lines starting with # are comments.
+
+# ---- Your explicit list -------------------------------------------------
+com.tcl.suspension               # the Inputs/Source menu on the remote. Name looks like junk. It is not.
+com.tcl.tv                       # HDMI / antenna input service
+com.tcl.tvinput                  # HDMI / antenna input service
+com.google.android.tv.remote.service   # remote control
+com.tcl.tcl_bt_rcu_service       # Bluetooth remote control service
+com.tcl.autopair                 # remote pairing
+com.google.android.gms           # Play Services
+com.google.android.gsf           # Google Services Framework
+com.android.vending              # Play Store
+com.android.location.fused       # disabling this boot-loops the TV
+*inputmethod*                    # every on-screen keyboard / IME
+*.ime                            # some TCL/MediaTek IMEs use this suffix
+com.google.android.apps.tv.launcherx    # home screen - only via 'replace-launcher'
+
+# ---- Android framework / system. Disabling any of these bricks the UI. --
+android
+com.android.systemui
+com.android.settings
+com.android.settings.intelligence
+com.android.shell
+com.android.providers.*
+com.android.server.*
+com.android.permissioncontroller
+com.google.android.permissioncontroller
+com.android.packageinstaller
+com.google.android.packageinstaller
+com.android.keychain
+com.android.certinstaller
+com.android.externalstorage
+com.android.documentsui
+com.android.se
+com.android.bluetooth
+com.android.bluetoothmidi
+com.android.nfc
+com.android.wifi*
+com.android.networkstack*
+com.google.android.networkstack*
+com.android.captiveportallogin
+com.android.dynsystem
+com.android.emergency
+com.android.localtransport
+com.android.statementservice
+com.android.storagemanager
+com.android.systemui.*
+com.android.webview
+com.google.android.webview
+com.google.android.trichromelibrary*
+com.google.android.tts                 # text-to-speech; accessibility + some apps hard-depend on it
+com.google.android.ext.services
+com.google.android.ext.shared
+com.google.android.configupdater
+com.google.android.gms.location.history
+com.google.android.onetimeinitializer
+com.google.android.overlay.*
+com.android.cts.*
+
+# ---- TV signal path: video, audio, HDMI, panel, tuner, CEC -------------
+*hdmi*
+*tvinput*
+*.tuner*
+*dtvplayer*
+*audio*
+*sound*
+*.pq*                            # picture-quality engine
+*dolby*
+*dts*
+*atmos*
+*.panel*
+*mediatek*
+com.mediatek.*
+com.tcl.factory*
+com.tcl.*hdmi*
+com.tcl.*tv*
+com.tcl.*input*
+com.tcl.*audio*
+com.tcl.*volume*
+com.tcl.*channel*
+com.tcl.*epg*
+com.tcl.*cec*
+com.tcl.*hdr*
+com.tcl.*power*
+com.tcl.*boot*
+com.tcl.*key*
+com.tcl.*remote*
+com.tcl.*rcu*
+com.tcl.*bt*
+com.tcl.*wifi*
+com.tcl.*network*
+com.tcl.*settings*
+com.tcl.*launcher*               # TCL's own launcher stub; some builds route HOME through it
+
+# ---- Apps you told me must keep working --------------------------------
+com.netflix.ninja                # Netflix (TV build)
+com.netflix.*
+com.google.android.youtube.tv    # YouTube for TV
+com.google.android.youtube.tvunplugged
+com.liskovsoft.videomanager      # SmartTube, if installed
+me.efesser.flauncher             # FLauncher - your replacement home screen
