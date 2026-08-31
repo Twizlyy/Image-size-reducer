@@ -763,6 +763,16 @@ function Cmd-Status {
         Warn "undo-all will NOT restore these. Re-enable by hand if wanted:"
         foreach ($o in $orphans) { Say "    adb shell pm enable --user 0 $o" }
     }
+
+    # The mirror case: a row claiming a package is disabled when the TV says it
+    # is enabled. Harmless to undo-all, but it makes the record overstate what
+    # was done, and the count no longer matches the device.
+    $stale = @($known | Where-Object { $dev -notcontains $_ })
+    if ($stale) {
+        Warn "$($stale.Count) row(s) in the record name a package that is NOT"
+        Warn "disabled on the TV. Run 'relabel' to drop them. They are:"
+        foreach ($o in $stale) { Say "    $o" }
+    }
     $homePkg = Get-HomePackage
     if ($homePkg) { Say "Home screen resolves to: $homePkg" }
     else          { Warn "Could not determine the current home screen from adb." }
@@ -900,13 +910,15 @@ function Cmd-SetHome {
 
 
 function Cmd-Relabel {
+    Assert-Connected
     $rows = @(Get-RecordRows)
     if (-not $rows) { Warn "kapatilanlar.txt is empty."; return }
     $g1 = Read-PatternFile (Join-Path $Root 'group1-junk.txt')
     $g2 = Read-PatternFile (Join-Path $Root 'group2-ask.txt')
 
     Step "Tidying the record"
-    $seen = @{}; $filled = 0; $dupes = 0
+    $dev = @(Get-DisabledOnDevice)
+    $seen = @{}; $filled = 0; $dupes = 0; $stale = 0
     $out = @(
         '# Packages disabled by Tv-Debloat.ps1',
         '# Undo any single line with:   adb shell pm enable <package>',
@@ -916,6 +928,11 @@ function Cmd-Relabel {
     foreach ($r in ($rows | Sort-Object Batch, Package)) {
         if ($seen.ContainsKey($r.Package)) {
             $dupes++
+            continue
+        }
+        # A row for a package the TV reports as enabled is no longer true.
+        if ($dev -notcontains $r.Package) {
+            $stale++
             continue
         }
         $seen[$r.Package] = $true
@@ -928,6 +945,7 @@ function Cmd-Relabel {
     }
     $out | Set-Content $DisabledFile -Encoding UTF8
     Good "Descriptions filled in: $filled.  Duplicate rows removed: $dupes."
+    if ($stale) { Good "Stale rows dropped (package no longer disabled): $stale." }
     Say  "$($seen.Count) unique packages now recorded."
 }
 
