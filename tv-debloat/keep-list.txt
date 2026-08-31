@@ -102,7 +102,8 @@ com.netflix.*
 com.google.android.youtube.tv    # YouTube for TV
 com.google.android.youtube.tvunplugged
 com.liskovsoft.videomanager      # SmartTube, if installed
-me.efesser.flauncher             # FLauncher - your replacement home screen
+me.efesser.flauncher             # FLauncher - replacement home screen
+com.spocky.projengmenu           # Projectivy Launcher - current home screen
 
 # ---- ADDED after seeing the real package list from the TV ---------------
 # On Android TV the Settings app is com.android.tv.settings, NOT

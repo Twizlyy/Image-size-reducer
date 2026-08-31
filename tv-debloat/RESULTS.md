@@ -50,6 +50,10 @@ up cleanly in a memory total.
 | 4 | Owner's explicit choices | 7 |
 | 5 | Google TV launcher, after FLauncher was confirmed working | 1 |
 
+The home screen was later switched again from FLauncher to Projectivy
+Launcher (`com.spocky.projengmenu`). Both are protected in `keep-list.txt`;
+the Google TV launcher remains disabled throughout.
+
 Kept deliberately: the Inputs/Source quick panel, HDMI and tuner services, the
 remote control stack, Play Services and Store, fused location, every IME,
 Android TV Settings (which also provides FallbackHome), Netflix, YouTube, all
