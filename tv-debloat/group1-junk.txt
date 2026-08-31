@@ -47,3 +47,34 @@ com.android.printspooler             | Print spooler. A TV cannot print.
 com.google.android.syncadapters.contacts | Syncs a contacts list the TV has no use for
 com.google.android.syncadapters.calendar | Syncs a calendar the TV has no use for
 com.android.bookmarkprovider         | Browser bookmark store for a browser the TV does not ship
+
+# ---- Exact packages disabled on this TV, for the record --------------
+com.tcl.waterfall.overseas | TCL "Waterfall" home-screen content feed - a main source of the ad rows
+com.tcl.overseasappshow | TCL app-promotion showcase
+com.tcl.bi | TCL analytics upload ("BI" = business intelligence)
+com.tcl.logkit | TCL log collection and upload
+com.tcl.esticker | Shop-floor "e-sticker" spec overlay, meaningless at home
+com.google.android.feedback | Google crash and feedback reporting
+android.autoinstalls.config.google.gtvpai | Config that silently auto-installs promoted apps
+com.google.android.tv.assistant | Google TV assistant companion service
+com.tcl.assistant | TCL's own assistant layer
+com.tcl.smartalexa | Amazon Alexa integration built into the TV
+com.tcl.hearaid | TCL hearing-aid audio routing
+com.android.dreams.basic | Basic AOSP screensaver
+com.android.messaging | SMS app. There is no SIM in a TV.
+com.android.camera2 | Camera app. There is no camera.
+com.tcl.initsetup | TCL's own initial-setup wizard
+com.tcl.useragreement | The terms-and-conditions screen, accepted once
+com.tcl.ocean.instructions | TCL onboarding tutorial
+com.tcl.messagebox | TCL push notifications - the channel promo messages arrive on
+com.tcl.usercenter | TCL account centre
+org.chromium.webview_shell | A WebView test harness, not used by anything
+com.android.wallpaperbackup | Backs up wallpaper. A TV has none.
+com.android.sharedstoragebackup | Backs up shared storage to Google Backup
+com.android.backupconfirm | Backup confirmation dialog
+com.tcl.gallery | TCL USB photo viewer - VLC covers this
+com.tcl.ui_mediaCenter | TCL USB media player - VLC covers this
+com.tcl.gamebar | TCL console overlay showing FPS and picture presets
+com.android.hotspot2.osulogin | Passpoint Wi-Fi sign-up - unused on Ethernet
+com.tcl.browser | TCL's built-in web browser
+com.google.android.apps.tv.launcherx | Google TV home screen with its ad and recommendation rows

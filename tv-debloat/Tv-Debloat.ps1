@@ -27,7 +27,7 @@ param(
     [ValidateSet('help', 'setup', 'doctor', 'connect', 'measure', 'triage', 'disable',
                  'enable', 'undo-last', 'undo-all', 'undo-command', 'tune', 'trim',
                  'reboot', 'report', 'replace-launcher', 'status', 'list-home',
-                 'set-home')]
+                 'set-home', 'relabel')]
     [string]$Command = 'help',
 
     [string]$Ip,
@@ -418,6 +418,12 @@ function Cmd-Measure {
     Good "Saved to snapshots\$Label\"
     Say ("Total RAM {0}   Free {1}   Used {2}   Enabled pkgs {3}   Disabled {4}" -f `
          $m.Total, $m.Free, $m.Used, $m.Enabled, $m.Disabled)
+    if ($m.Total -eq 'n/a') {
+        Warn "The memory figures did not parse. dumpsys meminfo returns nothing"
+        Warn "useful for a minute or two after a reboot, while services start."
+        Warn "Wait a few minutes with the TV idle, then measure again under a"
+        Warn "new label, e.g.  .\Tv-Debloat.ps1 measure -Label after-settled"
+    }
 }
 
 function Get-MemSummary {
@@ -726,6 +732,11 @@ function Cmd-ReplaceLauncher {
         exit 1
     }
 
+    if (@(Get-DisabledOnDevice) -contains $LauncherPkg) {
+        Good "$LauncherPkg is already disabled. Nothing to do."
+        return
+    }
+
     Warn "About to disable $LauncherPkg."
     Warn "If FLauncher is NOT working, this leaves a black screen at boot."
     $answer = Read-Host "  Type exactly YES to continue"
@@ -806,6 +817,39 @@ function Cmd-SetHome {
     }
 }
 
+
+function Cmd-Relabel {
+    $rows = @(Get-RecordRows)
+    if (-not $rows) { Warn "kapatilanlar.txt is empty."; return }
+    $g1 = Read-PatternFile (Join-Path $Root 'group1-junk.txt')
+    $g2 = Read-PatternFile (Join-Path $Root 'group2-ask.txt')
+
+    Step "Tidying the record"
+    $seen = @{}; $filled = 0; $dupes = 0
+    $out = @(
+        '# Packages disabled by Tv-Debloat.ps1',
+        '# Undo any single line with:   adb shell pm enable <package>',
+        '# Tab-separated: timestamp<TAB>batch<TAB>package<TAB>what it was',
+        ''
+    )
+    foreach ($r in ($rows | Sort-Object Batch, Package)) {
+        if ($seen.ContainsKey($r.Package)) {
+            $dupes++
+            continue
+        }
+        $seen[$r.Package] = $true
+        $why = $r.Reason
+        if (-not $why -or $why -eq 'no description recorded') {
+            $h = ($g1 + $g2) | Where-Object { $r.Package -like $_.Pattern } | Select-Object -First 1
+            if ($h -and $h.Reason) { $why = $h.Reason; $filled++ }
+        }
+        $out += "$($r.Time)`t$($r.Batch)`t$($r.Package)`t$why"
+    }
+    $out | Set-Content $DisabledFile -Encoding UTF8
+    Good "Descriptions filled in: $filled.  Duplicate rows removed: $dupes."
+    Say  "$($seen.Count) unique packages now recorded."
+}
+
 function Cmd-Report {
     Step "Before / after"
     $snaps = @(Get-ChildItem $SnapDir -Directory -ErrorAction SilentlyContinue | Sort-Object CreationTime)
@@ -863,6 +907,7 @@ Tv-Debloat.ps1 - reversible Android TV cleanup over ADB
   list-home                      list every app that can act as the home screen
   set-home -Packages <pkg>       make that app the home screen (Google TV has no chooser)
   replace-launcher               disable Google TV home once FLauncher is default
+  relabel                        fill in missing descriptions, drop duplicate rows
   report                         before/after table -> REPORT.md
 
 Order: setup -> connect -> measure before -> triage -> disable batches
@@ -888,6 +933,7 @@ switch ($Command) {
     'trim'             { Cmd-Trim }
     'reboot'           { Cmd-Reboot }
     'status'           { Cmd-Status }
+    'relabel'          { Cmd-Relabel }
     'list-home'        { Cmd-ListHome }
     'set-home'         { Cmd-SetHome }
     'replace-launcher' { Cmd-ReplaceLauncher }
