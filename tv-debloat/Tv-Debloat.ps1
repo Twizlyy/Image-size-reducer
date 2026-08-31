@@ -82,15 +82,39 @@ function Get-DeviceArg {
 }
 
 # Runs adb and returns stdout as an array of trimmed lines.
+# PowerShell turns anything a native .exe writes to stderr into an ErrorRecord,
+# and with $ErrorActionPreference = 'Stop' that becomes a *terminating* error.
+# adb writes routine chatter to stderr - "* daemon not running; starting now" -
+# so a perfectly healthy first run would otherwise kill the script. Every native
+# call goes through here, where the preference is relaxed for that call only
+# (assigning it inside a function scopes it to the function).
+function Invoke-NativeCapture {
+    param([string]$Exe, [string[]]$Arguments)
+    $ErrorActionPreference = 'Continue'
+    $raw  = & $Exe @Arguments 2>&1
+    $code = $LASTEXITCODE
+    $text = ($raw | ForEach-Object {
+        if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.ToString() } else { $_ }
+    }) -join "`n"
+    return [pscustomobject]@{ Text = $text; Code = $code }
+}
+
+# Lines adb prints that are noise, not answers.
+function Remove-AdbNoise {
+    param([string]$Text)
+    return (($Text -split "`r?`n") | Where-Object {
+        $_ -notmatch '^\s*\*\s*daemon' -and $_ -notmatch 'daemon started successfully'
+    }) -join "`n"
+}
+
 function Invoke-Adb {
     param([string[]]$AdbArgs, [switch]$AllowFailure)
     $adb = Assert-Adb
     $all = @(Get-DeviceArg) + $AdbArgs
-    $out = & $adb @all 2>&1
-    $code = $LASTEXITCODE
-    $text = ($out | Out-String)
-    if ($code -ne 0 -and -not $AllowFailure) {
-        Fail "adb $($all -join ' ')  ->  exit $code"
+    $r = Invoke-NativeCapture -Exe $adb -Arguments $all
+    $text = Remove-AdbNoise $r.Text
+    if ($r.Code -ne 0 -and -not $AllowFailure) {
+        Fail "adb $($all -join ' ')  ->  exit $($r.Code)"
         Say $text.Trim()
         exit 1
     }
@@ -266,9 +290,11 @@ function Cmd-Doctor {
     Step "Checking the toolchain"
     $adb = Get-AdbExe
     if ($adb) { Good "adb found: $adb" } else { Fail "adb not found. Run: .\Tv-Debloat.ps1 setup"; return }
-    Say ((& $adb version | Select-Object -First 1))
+    Say (((Remove-AdbNoise (Invoke-NativeCapture -Exe $adb -Arguments @('version')).Text) -split "`r?`n") |
+         Where-Object { $_.Trim() } | Select-Object -First 1)
     Step "Devices adb can see"
-    (& $adb devices) | ForEach-Object { Say $_ }
+    ((Remove-AdbNoise (Invoke-NativeCapture -Exe $adb -Arguments @('devices')).Text) -split "`r?`n") |
+        Where-Object { $_.Trim() } | ForEach-Object { Say $_ }
 }
 
 function Cmd-Connect {
@@ -281,14 +307,15 @@ function Cmd-Connect {
     Say "computer?'. Tick 'Always allow from this computer', then OK."
     Write-Host ""
 
-    & $adb disconnect $target 2>&1 | Out-Null
-    $out = (& $adb connect $target 2>&1 | Out-String).Trim()
+    Invoke-NativeCapture -Exe $adb -Arguments @('start-server')        | Out-Null
+    Invoke-NativeCapture -Exe $adb -Arguments @('disconnect', $target) | Out-Null
+    $out = (Remove-AdbNoise (Invoke-NativeCapture -Exe $adb -Arguments @('connect', $target)).Text).Trim()
     Say $out
 
     if ($out -match 'connected to') {
         $target | Set-Content $DeviceFile -Encoding ASCII -NoNewline
         Start-Sleep -Seconds 2
-        $devs = (& $adb devices | Out-String)
+        $devs = (Invoke-NativeCapture -Exe $adb -Arguments @('devices')).Text
         if ($devs -match 'unauthorized') {
             Warn "Connected, but not yet authorised. Approve the dialog on the TV,"
             Warn "then run this connect command again."
