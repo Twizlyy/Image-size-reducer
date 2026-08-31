@@ -120,3 +120,27 @@ com.tcl.system.server              # TCL system service
 com.tcl.providers.config           # TCL configuration provider
 com.tcl.android.webview            # may be the WebView provider on this build
 com.tcl.micmanager                 # microphone manager, tied to the remote's mic
+
+# ---- YOUR DECISIONS, 31/08/2026 ----------------------------------------
+# Encoded here so a later batch cannot disable them by accident.
+
+# "Which streaming apps do you use?" -> all four groups kept.
+com.amazon.amazonvideo.livingroom  # Prime Video - you use it
+com.disney.disneyplus              # Disney+ - you use it
+com.apple.atve.androidtv.appletv   # Apple TV - you use it
+fr.francetv.pluzz                  # France TV - you use it
+com.canal.android.canal            # myCANAL - you use it
+com.ligueunpass.app                # Ligue 1 Pass - you use it
+tv.wuaki.apptv                     # Rakuten TV - you use it
+com.viki.android                   # Viki - you use it
+
+# "Do you cast?" -> yes.
+com.google.android.apps.mediashell # Chromecast built-in receiver - you cast
+com.google.android.gms.cast*       # Cast support services
+com.tcl.miracast                   # TCL screen mirroring - kept alongside casting
+com.tcl.magiconnectfree            # TCL device-connect / mirroring
+
+# "TCL firmware updates?" -> keep them on, for security patches.
+com.tcl.versionUpdateApp           # TCL firmware updater - you chose to keep updates
+com.tcl.*ota*                      # any TCL over-the-air update component
+com.tcl.*upgrade*                  # any TCL upgrade component
