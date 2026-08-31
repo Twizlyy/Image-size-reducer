@@ -592,13 +592,32 @@ function Cmd-Disable {
     Show-TestChecklist
 }
 
+# Packages are disabled with 'pm disable-user --user 0'. A bare 'pm enable'
+# does not reliably undo a user-scoped disable on every build - and worse, it
+# can report "new state: enabled" while the package stays disabled. So try both
+# forms and VERIFY against the device rather than trusting what adb printed.
+function Enable-Package {
+    param([string]$Pkg)
+    foreach ($cmd in @("pm enable $Pkg", "pm enable --user 0 $Pkg")) {
+        Invoke-AdbShell $cmd -AllowFailure | Out-Null
+        if (@(Get-DisabledOnDevice) -notcontains $Pkg) { return $true }
+    }
+    return $false
+}
+
+function Report-EnableFailure {
+    param([string]$Pkg)
+    Fail "$Pkg is STILL disabled after both enable forms."
+    Say  "  Left in the record so it is not lost. Try by hand:"
+    Say  "    adb shell pm enable --user 0 $Pkg"
+}
+
 function Cmd-Enable {
     Assert-Connected
     if (-not $Packages) { Fail "Nothing given. Use: -Packages com.a,com.b"; exit 1 }
     Step "Re-enabling"
     foreach ($p in (Expand-PackageList $Packages)) {
-        $out = (Invoke-AdbShell "pm enable $p" -AllowFailure) -join ' '
-        if ($out -match 'new state: enabled') { Good "$p" } else { Fail "$p -> $($out.Trim())" }
+        if (Enable-Package $p) { Good "$p" } else { Report-EnableFailure $p }
     }
 }
 
@@ -610,17 +629,20 @@ function Cmd-UndoLast {
     $sel  = @($rows | Where-Object { $_.Batch -eq $last })
 
     Step "Undoing batch $last  ($($sel.Count) package(s))"
+    $freed = @()
     foreach ($r in $sel) {
-        $out = (Invoke-AdbShell "pm enable $($r.Package)" -AllowFailure) -join ' '
-        if ($out -match 'new state: enabled') { Good "$($r.Package)" } else { Fail "$($r.Package) -> $($out.Trim())" }
+        if (Enable-Package $r.Package) { Good "$($r.Package)"; $freed += $r.Package }
+        else { Report-EnableFailure $r.Package }
     }
 
-    # Drop the batch from the record so the file stays truthful.
+    # Drop ONLY the rows actually re-enabled. A package that is still disabled
+    # keeps its row, so the record can never claim something is enabled while
+    # the TV still has it off - which would put it beyond reach of undo-all.
     $keep = Get-Content $DisabledFile | Where-Object {
         if ($_ -match '^\s*#' -or -not $_.Trim()) { return $true }
         $f = $_ -split "`t"
         if ($f.Count -lt 3) { return $true }
-        return ([int]$f[1] -ne $last)
+        return ($freed -notcontains $f[2])
     }
     $keep | Set-Content $DisabledFile -Encoding UTF8
 
@@ -634,9 +656,13 @@ function Cmd-UndoAll {
     $rows = @(Get-RecordRows)
     if (-not $rows) { Warn "Nothing recorded. Nothing to undo."; return }
     Step "Re-enabling all $($rows.Count) recorded package(s)"
+    $stuck = @()
     foreach ($r in $rows) {
-        $out = (Invoke-AdbShell "pm enable $($r.Package)" -AllowFailure) -join ' '
-        if ($out -match 'new state: enabled') { Good "$($r.Package)" } else { Fail "$($r.Package) -> $($out.Trim())" }
+        if (Enable-Package $r.Package) { Good "$($r.Package)" }
+        else { Report-EnableFailure $r.Package; $stuck += $r.Package }
+    }
+    if ($stuck) {
+        Warn "$($stuck.Count) package(s) could not be re-enabled and remain recorded."
     }
     Step "Restoring animation speeds to stock (1.0)"
     foreach ($k in 'window_animation_scale', 'transition_animation_scale', 'animator_duration_scale') {
@@ -696,8 +722,20 @@ function Cmd-Status {
     Assert-Connected
     Step "Current state"
     $rows = @(Get-RecordRows)
+    $dev  = @(Get-DisabledOnDevice)
     Say "Recorded as disabled by this tool: $($rows.Count)"
-    Say "Disabled on the TV right now:      $(@(Get-DisabledOnDevice).Count)"
+    Say "Disabled on the TV right now:      $($dev.Count)"
+
+    # A package disabled on the TV but missing from the record is beyond the
+    # reach of undo-all. Say so loudly rather than leaving it to be spotted by
+    # comparing two counts by eye.
+    $known   = @($rows | ForEach-Object { $_.Package })
+    $orphans = @($dev | Where-Object { $known -notcontains $_ })
+    if ($orphans) {
+        Warn "$($orphans.Count) package(s) disabled on the TV but NOT in the record."
+        Warn "undo-all will NOT restore these. Re-enable by hand if wanted:"
+        foreach ($o in $orphans) { Say "    adb shell pm enable --user 0 $o" }
+    }
     $homePkg = Get-HomePackage
     if ($homePkg) { Say "Home screen resolves to: $homePkg" }
     else          { Warn "Could not determine the current home screen from adb." }
