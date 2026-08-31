@@ -183,6 +183,25 @@ function Expand-PackageList {
         Select-Object -Unique)
 }
 
+# Which package currently owns HOME. Android TV builds differ in what
+# resolve-activity prints, so try the brief form, the verbose form, and the
+# launcher-role query before giving up. Returns '' if none of them answer.
+function Get-HomePackage {
+    $brief = Invoke-AdbShell 'cmd package resolve-activity --brief -c android.intent.category.HOME' -AllowFailure |
+             Where-Object { $_ -match '^[A-Za-z0-9_.]+/' } | Select-Object -First 1
+    if ($brief -and $brief -match '^([A-Za-z0-9_.]+)/') { return $Matches[1] }
+
+    $verbose = Invoke-AdbShell 'cmd package resolve-activity -c android.intent.category.HOME' -AllowFailure |
+               Where-Object { $_ -match 'packageName=' } | Select-Object -First 1
+    if ($verbose -and $verbose -match 'packageName=([A-Za-z0-9_.]+)') { return $Matches[1] }
+
+    $role = Invoke-AdbShell 'cmd shortcut get-default-launcher' -AllowFailure |
+            Where-Object { $_ -match '[A-Za-z0-9_.]+/' } | Select-Object -First 1
+    if ($role -and $role -match '([A-Za-z0-9_.]+)/') { return $Matches[1] }
+
+    return ''
+}
+
 function Get-InstalledPackages {
     Invoke-AdbShell 'pm list packages' |
         Where-Object { $_ -match '^package:' } |
@@ -630,9 +649,9 @@ function Cmd-Status {
     $rows = @(Get-RecordRows)
     Say "Recorded as disabled by this tool: $($rows.Count)"
     Say "Disabled on the TV right now:      $(@(Get-DisabledOnDevice).Count)"
-    $homePkg = (Invoke-AdbShell 'cmd package resolve-activity -c android.intent.category.HOME' -AllowFailure |
-             Where-Object { $_ -match 'packageName=' } | Select-Object -First 1)
-    if ($homePkg) { Say "Home screen resolves to: $(($homePkg -split '=')[-1].Trim())" }
+    $homePkg = Get-HomePackage
+    if ($homePkg) { Say "Home screen resolves to: $homePkg" }
+    else          { Warn "Could not determine the current home screen from adb." }
     foreach ($k in 'window_animation_scale', 'transition_animation_scale', 'animator_duration_scale') {
         $v = (Invoke-AdbShell "settings get global $k" | Where-Object { $_ }) -join ''
         Say "$k = $v"
@@ -652,10 +671,9 @@ function Cmd-ReplaceLauncher {
     }
     Good "FLauncher is installed."
 
-    $homeLine = (Invoke-AdbShell 'cmd package resolve-activity -c android.intent.category.HOME' -AllowFailure |
-                 Where-Object { $_ -match 'packageName=' } | Select-Object -First 1)
-    $current = if ($homeLine) { ($homeLine -split '=')[-1].Trim() } else { '' }
-    Say "HOME currently resolves to: $current"
+    $current = Get-HomePackage
+    if ($current) { Say "HOME currently resolves to: $current" }
+    else          { Warn "adb could not tell me which launcher owns HOME on this build." }
 
     if ($current -ne $FLauncherPkg -and -not $FLauncherIsDefault) {
         Fail "FLauncher is not the default home screen yet."
