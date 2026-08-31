@@ -661,6 +661,16 @@ function Cmd-UndoAll {
         if (Enable-Package $r.Package) { Good "$($r.Package)" }
         else { Report-EnableFailure $r.Package; $stuck += $r.Package }
     }
+    # Keep rows only for packages that did NOT come back. Leaving every row in
+    # place meant a later re-disable appended duplicates on top of stale
+    # entries, and the record drifted away from the device.
+    $keep = Get-Content $DisabledFile | Where-Object {
+        if ($_ -match '^\s*#' -or -not $_.Trim()) { return $true }
+        $f = $_ -split "`t"
+        if ($f.Count -lt 3) { return $true }
+        return ($stuck -contains $f[2])
+    }
+    $keep | Set-Content $DisabledFile -Encoding UTF8
     if ($stuck) {
         Warn "$($stuck.Count) package(s) could not be re-enabled and remain recorded."
     }
@@ -729,8 +739,25 @@ function Cmd-Status {
     # A package disabled on the TV but missing from the record is beyond the
     # reach of undo-all. Say so loudly rather than leaving it to be spotted by
     # comparing two counts by eye.
-    $known   = @($rows | ForEach-Object { $_.Package })
-    $orphans = @($dev | Where-Object { $known -notcontains $_ })
+    $known = @($rows | ForEach-Object { $_.Package })
+
+    # Packages already disabled in the 'before' snapshot were not our doing,
+    # so they are not orphans and reporting them as such is just noise.
+    $preFile = Join-Path $Root 'snapshots\before\packages-disabled.txt'
+    $pre = @()
+    if (Test-Path $preFile) {
+        $pre = @(Get-Content $preFile |
+                 ForEach-Object { ($_ -replace '^package:', '').Trim() } |
+                 Where-Object { $_ })
+    }
+
+    $preHit  = @($dev | Where-Object { $known -notcontains $_ -and $pre -contains $_ })
+    $orphans = @($dev | Where-Object { $known -notcontains $_ -and $pre -notcontains $_ })
+
+    if ($preHit) {
+        Say "$($preHit.Count) package(s) were already disabled before this tool ran:"
+        foreach ($o in $preHit) { Say "    $o" }
+    }
     if ($orphans) {
         Warn "$($orphans.Count) package(s) disabled on the TV but NOT in the record."
         Warn "undo-all will NOT restore these. Re-enable by hand if wanted:"
@@ -747,28 +774,41 @@ function Cmd-Status {
 
 function Cmd-ReplaceLauncher {
     Assert-Connected
-    Step "Replacing the Google TV home screen with FLauncher"
+    Step "Disabling the Google TV home screen"
 
-    $installed = @(Get-InstalledPackages)
-    if ($installed -notcontains $FLauncherPkg) {
-        Fail "FLauncher is not installed."
-        Say "Install it from the Play Store on the TV first (search 'FLauncher'),"
-        Say "open it once, then run this command again."
-        exit 1
-    }
-    Good "FLauncher is installed."
-
+    # Whatever currently owns HOME is the replacement - Projectivy, FLauncher,
+    # or anything else. Hardcoding one launcher was wrong: the check has to
+    # follow the device, not a name baked into this script.
     $current = Get-HomePackage
-    if ($current) { Say "HOME currently resolves to: $current" }
-    else          { Warn "adb could not tell me which launcher owns HOME on this build." }
-
-    if ($current -ne $FLauncherPkg -and -not $FLauncherIsDefault) {
-        Fail "FLauncher is not the default home screen yet."
-        Say "On the TV: press Home, choose FLauncher, pick 'Always'."
-        Say "Then re-run. If your firmware gives no chooser, confirm you have set"
-        Say "it inside FLauncher's own settings and re-run with -FLauncherIsDefault."
+    if (-not $current) {
+        Fail "adb cannot tell me which launcher owns HOME on this build."
+        Say "Run:  .\Tv-Debloat.ps1 list-home"
+        Say "and set a launcher with set-home before disabling the stock one."
         exit 1
     }
+    Say "HOME currently resolves to: $current"
+
+    if ($current -eq $LauncherPkg) {
+        Fail "The Google TV launcher is still your home screen."
+        Say "Set a replacement first:"
+        Say "  .\Tv-Debloat.ps1 list-home"
+        Say "  .\Tv-Debloat.ps1 set-home -Packages <your launcher>"
+        exit 1
+    }
+
+    # FallbackHome means no real launcher is set - disabling now is how you
+    # get a TV with nowhere to go.
+    if ($current -like 'com.android.tv.settings*') {
+        Fail "HOME resolves to FallbackHome, which is not a launcher."
+        Say "Install or set a real launcher first, then re-run."
+        exit 1
+    }
+
+    if (@(Get-InstalledPackages) -notcontains $current) {
+        Fail "$current owns HOME but is not installed. Refusing to continue."
+        exit 1
+    }
+    Good "$current is installed and owns HOME."
 
     if (@(Get-DisabledOnDevice) -contains $LauncherPkg) {
         Good "$LauncherPkg is already disabled. Nothing to do."
@@ -776,7 +816,9 @@ function Cmd-ReplaceLauncher {
     }
 
     Warn "About to disable $LauncherPkg."
-    Warn "If FLauncher is NOT working, this leaves a black screen at boot."
+    Warn "If $current is NOT working, this leaves a black screen at boot."
+    Warn "Note: the remote's branded hotkeys (Netflix/Prime/YouTube/Media) may"
+    Warn "stop working while the Google TV launcher is disabled."
     $answer = Read-Host "  Type exactly YES to continue"
     if ($answer -ne 'YES') { Say "Cancelled. Nothing changed."; return }
 
@@ -785,12 +827,13 @@ function Cmd-ReplaceLauncher {
     if ($out -match 'new state: disabled') {
         Good "$LauncherPkg disabled."
         Add-Record -Batch $batch -Pkg $LauncherPkg -Reason 'Google TV home screen with its ad and recommendation rows'
-        Add-Log "Batch $batch. Disabled the Google TV launcher after confirming FLauncher is default HOME.`n`nUndo: ``adb shell pm enable $LauncherPkg``"
+        Add-Log "Batch $batch. Disabled the Google TV launcher; HOME was $current."
         Say ""
         Say "Now: .\Tv-Debloat.ps1 reboot"
-        Say "After it comes back, confirm FLauncher is still the home screen."
-        Say "If you get a black screen, plug a USB keyboard in or reconnect adb and run:"
-        Say "  adb shell pm enable $LauncherPkg"
+        Say "After it comes back, confirm $current is still the home screen AND"
+        Say "test the remote's Netflix / Prime / YouTube / Media buttons."
+        Say "If you get a black screen, reconnect adb and run:"
+        Say "  adb shell pm enable --user 0 $LauncherPkg"
     } else {
         Fail "Failed: $($out.Trim())"
     }
