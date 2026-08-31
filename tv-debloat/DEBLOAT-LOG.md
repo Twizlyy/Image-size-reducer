@@ -37,3 +37,17 @@ loses settings and apps but not the Widevine certificate.
 ---
 
 <!-- Entries are appended below this line by the script. -->
+
+## 2026-08-31 21:07:07 UTC
+
+Batch 1. Disabled: com.tcl.waterfall.overseas, com.tcl.bi.
+
+Undo this batch:
+
+```powershell
+.\Tv-Debloat.ps1 undo-last
+```
+
+## 2026-08-31 21:07:08 UTC
+
+Rolled back batch 1: com.tcl.waterfall.overseas, com.tcl.bi.

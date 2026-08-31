@@ -386,15 +386,24 @@ function Format-Kb {
 function Cmd-Triage {
     Assert-Connected
     Step "Reading the package list off the TV"
-    $installed = @(Get-InstalledPackages)
-    $disabled  = @(Get-DisabledOnDevice)
-    Say "$($installed.Count) packages installed, $($disabled.Count) already disabled"
+    $installed  = @(Get-InstalledPackages)
+    $disabled   = @(Get-DisabledOnDevice)
+    $thirdParty = @(Invoke-AdbShell 'pm list packages -3' |
+                    Where-Object { $_ -match '^package:' } |
+                    ForEach-Object { ($_ -replace '^package:', '').Trim() } |
+                    Where-Object { $_ })
+    Say "$($installed.Count) installed, $($disabled.Count) already disabled, $($thirdParty.Count) installed by you"
 
     $g1 = Read-PatternFile (Join-Path $Root 'group1-junk.txt')
     $g2 = Read-PatternFile (Join-Path $Root 'group2-ask.txt')
 
     $rows = foreach ($pkg in $installed) {
         if ($disabled -contains $pkg) { continue }
+        if ($thirdParty -contains $pkg) {
+            [pscustomobject]@{ Package = $pkg; Group = '0 YOURS'
+                               Reason = 'you installed this yourself - not factory bloat' }
+            continue
+        }
         $prot = Get-ProtectingPattern $pkg
         if ($prot) {
             [pscustomobject]@{ Package = $pkg; Group = '3 UNTOUCHABLE'
@@ -421,7 +430,7 @@ function Cmd-Triage {
     [void]$md.AppendLine('')
     [void]$md.AppendLine("Device packages: $($installed.Count) installed, $($disabled.Count) already disabled.")
     [void]$md.AppendLine('')
-    foreach ($g in @('1 JUNK', '2 ASK ME', '3 UNTOUCHABLE')) {
+    foreach ($g in @('1 JUNK', '2 ASK ME', '0 YOURS', '3 UNTOUCHABLE')) {
         $sel = @($rows | Where-Object { $_.Group -eq $g } | Sort-Object Package)
         [void]$md.AppendLine("## Group $g  ($($sel.Count))")
         [void]$md.AppendLine('')
@@ -433,7 +442,7 @@ function Cmd-Triage {
     $outFile = Join-Path $Root 'triage.md'
     $md.ToString() | Set-Content $outFile -Encoding UTF8
 
-    foreach ($g in @('1 JUNK', '2 ASK ME', '3 UNTOUCHABLE')) {
+    foreach ($g in @('1 JUNK', '2 ASK ME', '0 YOURS', '3 UNTOUCHABLE')) {
         $n = @($rows | Where-Object { $_.Group -eq $g }).Count
         Say ("Group {0,-14} {1,4}" -f $g, $n)
     }

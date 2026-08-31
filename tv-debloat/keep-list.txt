@@ -103,3 +103,20 @@ com.google.android.youtube.tv    # YouTube for TV
 com.google.android.youtube.tvunplugged
 com.liskovsoft.videomanager      # SmartTube, if installed
 me.efesser.flauncher             # FLauncher - your replacement home screen
+
+# ---- ADDED after seeing the real package list from the TV ---------------
+# On Android TV the Settings app is com.android.tv.settings, NOT
+# com.android.settings. Disabling it removes every settings menu.
+com.android.tv.settings
+com.android.tv.settings.*
+com.android.inputdevices           # keyboard layouts and input device config
+com.android.companiondevicemanager # pairs companion devices, incl. BT remotes
+com.android.vpndialogs             # VPN consent dialogs - ProtonVPN needs these
+com.android.tethering.overlay*     # tethering / network resource overlays
+com.google.android.tv.frameworkpackagestubs # stubs that catch framework intents
+com.google.android.modulemetadata  # mainline module metadata
+com.tvos                           # core TCL TV OS package
+com.tcl.system.server              # TCL system service
+com.tcl.providers.config           # TCL configuration provider
+com.tcl.android.webview            # may be the WebView provider on this build
+com.tcl.micmanager                 # microphone manager, tied to the remote's mic
